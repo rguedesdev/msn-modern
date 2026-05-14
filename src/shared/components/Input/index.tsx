@@ -4,7 +4,7 @@ interface IInput {
 
 function Input({ inputName }: IInput) {
   return (
-    <div className="relative w-[250px] mt-2">
+    <div className="relative w-full mt-2">
       <input
         type="text"
         placeholder=" "
