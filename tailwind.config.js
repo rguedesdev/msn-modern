@@ -4,23 +4,23 @@ export default {
   theme: {
     extend: {
       keyframes: {
-        thunderFlicker: {
-          "0%, 100%": { opacity: "0.2", filter: "blur(4px)" },
-          "5%, 15%, 25%": {
-            opacity: "1",
-            filter: "blur(2px)",
-          } /* Clarão do raio */,
-          "10%, 20%": { opacity: "0.4", filter: "blur(5px)" },
-          "30%, 85%": {
-            opacity: "0.1",
-            filter: "blur(6px)",
-          } /* Tempo de espera entre raios */,
-          "88%, 92%": { opacity: "1", filter: "blur(1px)" } /* Segundo raio */,
-        },
         gradientMove: {
           "0%": { backgroundPosition: "0% 50%" },
           "100%": { backgroundPosition: "300% 50%" },
         },
+        nudge: {
+          "0%, 100%": { transform: "translate(0, 0) rotate(0deg)" },
+          "10%, 30%, 50%, 70%, 90%": {
+            transform: "translate(-4px, -4px) rotate(-1deg)",
+          },
+          "20%, 40%, 60%, 80%": {
+            transform: "translate(4px, 4px) rotate(1deg)",
+          },
+        },
+      },
+
+      animation: {
+        nudge: "nudge 0.5s ease-in-out",
       },
     },
   },
