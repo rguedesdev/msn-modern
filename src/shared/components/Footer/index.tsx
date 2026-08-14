@@ -1,17 +1,17 @@
 function Footer() {
   return (
-    <footer>
+    <footer className="text-center">
       <div className="flex flex-col items-center gap-1">
-        <div className="flex flex-row items-center gap-1 font-semibold text-[#6ebea1] text-sm">
+        <div className="flex flex-row items-center gap-1 text-xs font-medium text-[#52758a]">
           <span>Esqueceu a Senha?</span>
-          <span className="font-medium transition-all ease hover:text-[#1b7c59] hover:underline cursor-pointer">
+          <span className="cursor-pointer font-semibold text-[#1680bb] transition hover:text-[#075f91] hover:underline">
             Clique aqui
           </span>
         </div>
         <div>
-          <div className="flex flex-row items-center gap-1 text-zinc-600 text-sm">
+          <div className="flex flex-row items-center gap-1 text-xs text-[#67899a]">
             <span>Não tem uma conta?</span>
-            <span className="font-medium transition-all ease hover:text-[#aad0ef] hover:underline cursor-pointer">
+            <span className="cursor-pointer font-semibold text-[#1680bb] transition hover:text-[#075f91] hover:underline">
               Cadastre-se
             </span>
           </div>

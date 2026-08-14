@@ -14,10 +14,13 @@
       {
         "title": "MSN Messenger",
         "width": 450,
-        "height": 950,
+        "height": 956,
         "resizable": true,
         "fullscreen": false,
-        "decorations": true
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "backgroundColor": [0, 0, 0, 0]
       }
     ],
     "security": {

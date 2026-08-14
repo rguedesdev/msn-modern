@@ -17,10 +17,15 @@ export default {
             transform: "translate(4px, 4px) rotate(1deg)",
           },
         },
+        msnToastIn: {
+          "0%": { opacity: "0", transform: "translateY(24px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
 
       animation: {
         nudge: "nudge 0.5s ease-in-out",
+        "msn-toast": "msnToastIn 0.28s ease-out",
       },
     },
   },

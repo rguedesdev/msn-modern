@@ -1,5 +1,3 @@
-import { IoCheckmark } from "react-icons/io5";
-import { FaCheck } from "react-icons/fa";
 import { ImCheckmark } from "react-icons/im";
 
 interface ICheckbox {
@@ -8,11 +6,11 @@ interface ICheckbox {
 
 function Checkbox({ checkboxText }: ICheckbox) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer select-none mt-3">
+    <label className="mt-3 flex cursor-pointer select-none items-center gap-2">
       <div className="relative">
         <input type="checkbox" className="peer sr-only" />
 
-        <div className="flex items-center justify-center w-5 h-5 rounded-md border border-zinc-400 bg-white transition-all duration-200 peer-hover:border-[#6ebea1] peer-checked:bg-[#6ebea1] peer-checked:border-[#6ebea1]">
+        <div className="flex h-5 w-5 items-center justify-center rounded-md border border-[#8cabb9] bg-white/85 shadow-[inset_0_1px_2px_rgba(42,83,104,0.1)] transition-all duration-200 peer-hover:border-[#4d9fc4] peer-checked:border-[#3989b1] peer-checked:bg-gradient-to-b peer-checked:from-[#78c5e5] peer-checked:to-[#3295c2]">
           <ImCheckmark className="text-white text-[16px] opacity-0 transition-opacity" />
         </div>
 
@@ -21,7 +19,7 @@ function Checkbox({ checkboxText }: ICheckbox) {
         </div>
       </div>
 
-      <span className="text-sm text-zinc-600">{checkboxText}</span>
+      <span className="text-xs text-[#52758a]">{checkboxText}</span>
     </label>
   );
 }

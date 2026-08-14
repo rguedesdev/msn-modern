@@ -6,6 +6,33 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #74b4d0 #e7f3f8;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e7f3f8;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 30px;
+  border: 2px solid #e7f3f8;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #9ed4e8 0%, #5ca7c8 100%);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #83c8e2 0%, #3f95bc 100%);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* body {
