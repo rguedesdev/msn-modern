@@ -209,10 +209,13 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
 
 #[cfg(target_os = "windows")]
 fn read_current_media() -> Result<Option<MediaInfo>, String> {
-    use windows::Media::Control::{
-        GlobalSystemMediaTransportControlsSession,
-        GlobalSystemMediaTransportControlsSessionManager,
-        GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+    use windows::Media::{
+        Control::{
+            GlobalSystemMediaTransportControlsSession,
+            GlobalSystemMediaTransportControlsSessionManager,
+            GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+        },
+        MediaPlaybackType,
     };
 
     fn relevant_window_titles(media_title: &str) -> String {
@@ -383,7 +386,12 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         }
     }
 
-    fn identify_windows_source(source_app_id: &str, metadata: &str, window_titles: &str) -> String {
+    fn identify_windows_source(
+        source_app_id: &str,
+        metadata: &str,
+        window_titles: &str,
+        is_video: bool,
+    ) -> String {
         let searchable_source = format!("{source_app_id} {metadata}").to_lowercase();
         let normalized_window_titles = window_titles.to_lowercase();
         let asia_dream_channels = [
@@ -472,6 +480,22 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         }
 
         let normalized_app_id = source_app_id.to_lowercase();
+        let browsers = [
+            ("chrome", "Google Chrome"),
+            ("chromium", "Chromium"),
+            ("msedge", "Microsoft Edge"),
+            ("firefox", "Mozilla Firefox"),
+            ("brave", "Brave"),
+            ("vivaldi", "Vivaldi"),
+            ("opera", "Opera"),
+            ("librewolf", "LibreWolf"),
+            ("waterfox", "Waterfox"),
+            ("floorp", "Floorp"),
+            ("zen", "Zen Browser"),
+        ];
+        let is_browser = browsers
+            .iter()
+            .any(|(identifier, _)| normalized_app_id.contains(identifier));
         let local_players = [
             ("vlc", "VLC"),
             ("wmplayer", "Windows Media Player"),
@@ -501,19 +525,9 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             return (*label).to_owned();
         }
 
-        let browsers = [
-            ("chrome", "Google Chrome"),
-            ("chromium", "Chromium"),
-            ("msedge", "Microsoft Edge"),
-            ("firefox", "Mozilla Firefox"),
-            ("brave", "Brave"),
-            ("vivaldi", "Vivaldi"),
-            ("opera", "Opera"),
-            ("librewolf", "LibreWolf"),
-            ("waterfox", "Waterfox"),
-            ("floorp", "Floorp"),
-            ("zen", "Zen Browser"),
-        ];
+        if is_browser && is_video {
+            return "YouTube".to_owned();
+        }
 
         if let Some((_, label)) = browsers
             .iter()
@@ -560,9 +574,18 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             .SourceAppUserModelId()
             .map(|value| value.to_string())
             .unwrap_or_default();
+        let is_video = properties
+            .PlaybackType()
+            .and_then(|value| value.Value())
+            .map(|playback_type| playback_type == MediaPlaybackType::Video)
+            .unwrap_or(false);
         let metadata = format!("{title} {artist} {subtitle} {album_title}");
-        let source =
-            identify_windows_source(&source_app_id, &metadata, &relevant_window_titles(&title));
+        let source = identify_windows_source(
+            &source_app_id,
+            &metadata,
+            &relevant_window_titles(&title),
+            is_video,
+        );
         if title.trim().is_empty() {
             let normalized_source = source.to_lowercase();
             let is_supported_radio = normalized_source.contains("kiss fm")

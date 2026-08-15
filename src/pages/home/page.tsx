@@ -99,30 +99,37 @@ const ASIA_DREAM_CHANNELS = [
   [
     "j-pop powerplay kawaii",
     "https://kathy.torontocast.com:2650/api/v2/history/?limit=1&offset=0&server=2",
+    "Asia DREAM Radio — J-Pop Powerplay Kawaii",
   ],
   [
     "j-pop powerplay",
     "https://kathy.torontocast.com:2650/api/v2/history/?limit=1&offset=0&server=1",
+    "Asia DREAM Radio — J-Pop Powerplay",
   ],
   [
     "j-club powerplay hiphop",
     "https://kathy.torontocast.com:3310/api/v2/history/?limit=1&offset=0&server=5",
+    "Asia DREAM Radio — J-Club Powerplay HipHop",
   ],
   [
     "j-rock powerplay",
     "https://kathy.torontocast.com:3310/api/v2/history/?limit=1&offset=0&server=4",
+    "Asia DREAM Radio — J-Rock Powerplay",
   ],
   [
     "jazz sakura",
     "https://kathy.torontocast.com:3310/api/v2/history/?limit=1&offset=0&server=1",
+    "Asia DREAM Radio — Jazz Sakura",
   ],
   [
     "j-sakura",
     "https://quincy.torontocast.com:1970/api/v2/history/?limit=1&offset=0&server=3",
+    "Asia DREAM Radio — J-Sakura",
   ],
   [
     "japan hits",
     "https://quincy.torontocast.com:1970/api/v2/history/?limit=1&offset=0&server=1",
+    "Asia DREAM Radio — Japan Hits",
   ],
 ] as const;
 const CANONICAL_UPPERCASE_ARTISTS: Record<string, string> = {
@@ -254,13 +261,9 @@ async function getKissFmTrack() {
   }
 }
 
-async function getAsiaDreamTrack(source: string) {
-  const normalizedSource = source.toLowerCase();
-  const channel = ASIA_DREAM_CHANNELS.find(([name]) =>
-    normalizedSource.includes(name),
-  );
-  if (!channel) return null;
-
+async function getAsiaDreamTrackFromChannel(
+  channel: (typeof ASIA_DREAM_CHANNELS)[number],
+) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 2_500);
 
@@ -301,6 +304,53 @@ async function getAsiaDreamTrack(source: string) {
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+async function getAsiaDreamTrack(source: string) {
+  const normalizedSource = source.toLowerCase();
+  const channel = ASIA_DREAM_CHANNELS.find(([name]) =>
+    normalizedSource.includes(name),
+  );
+
+  return channel ? getAsiaDreamTrackFromChannel(channel) : null;
+}
+
+function normalizeTrackIdentity(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function trackMatches(
+  media: MediaInfo,
+  track: Pick<MediaInfo, "title" | "artist">,
+) {
+  const mediaTitle = normalizeTrackIdentity(media.title);
+  const trackTitle = normalizeTrackIdentity(track.title);
+  if (
+    !mediaTitle ||
+    !trackTitle ||
+    (mediaTitle !== trackTitle &&
+      !mediaTitle.includes(trackTitle) &&
+      !trackTitle.includes(mediaTitle))
+  ) {
+    return false;
+  }
+
+  const mediaArtist = normalizeTrackIdentity(media.artist);
+  const trackArtist = normalizeTrackIdentity(track.artist);
+  return (
+    media.artist === UNKNOWN_ARTIST ||
+    track.artist === UNKNOWN_ARTIST ||
+    !mediaArtist ||
+    !trackArtist ||
+    mediaArtist === trackArtist ||
+    mediaArtist.includes(trackArtist) ||
+    trackArtist.includes(mediaArtist)
+  );
 }
 
 async function getRadioJHeroTrack() {
@@ -635,8 +685,77 @@ function HomePage() {
       track: Pick<MediaInfo, "title" | "artist"> | null;
       expiresAt: number;
     } | null = null;
+    let browserRadioCache: {
+      mediaKey: string;
+      media: MediaInfo;
+      expiresAt: number;
+    } | null = null;
 
-    const enrichRadioMedia = async (media: MediaInfo) => {
+    const identifyBrowserRadio = async (media: MediaInfo) => {
+      const normalizedSource = media.source.toLowerCase();
+      const browserSources = [
+        "chrome",
+        "chromium",
+        "edge",
+        "firefox",
+        "brave",
+        "vivaldi",
+        "opera",
+        "librewolf",
+        "waterfox",
+        "floorp",
+        "zen browser",
+        "navegador",
+        "player de música",
+      ];
+      if (
+        !browserSources.some((browser) => normalizedSource.includes(browser))
+      ) {
+        return media;
+      }
+
+      const mediaKey = `${media.source}\u0000${media.artist}\u0000${media.title}`;
+      if (
+        browserRadioCache?.mediaKey === mediaKey &&
+        browserRadioCache.expiresAt > Date.now()
+      ) {
+        return browserRadioCache.media;
+      }
+
+      const candidates = await Promise.all([
+        getKissFmTrack().then((track) => ({ source: "Kiss FM", track })),
+        getRadio89Track().then((track) => ({
+          source: "89 A Rádio Rock",
+          track,
+        })),
+        getRadioJHeroTrack().then((track) => ({
+          source: "Rádio J-Hero",
+          track,
+        })),
+        ...ASIA_DREAM_CHANNELS.map((channel) =>
+          getAsiaDreamTrackFromChannel(channel).then((track) => ({
+            source: channel[2],
+            track,
+          })),
+        ),
+      ]);
+      const match = candidates.find(
+        (candidate) => candidate.track && trackMatches(media, candidate.track),
+      );
+      const identifiedMedia = match?.track
+        ? { ...media, ...match.track, source: match.source }
+        : media;
+
+      browserRadioCache = {
+        mediaKey,
+        media: identifiedMedia,
+        expiresAt: Date.now() + 15_000,
+      };
+      return identifiedMedia;
+    };
+
+    const enrichRadioMedia = async (rawMedia: MediaInfo) => {
+      const media = await identifyBrowserRadio(rawMedia);
       const normalizedSource = media.source.toLowerCase();
       const normalizedArtist = media.artist.toLowerCase();
       const normalizedTitle = media.title.toLowerCase();
