@@ -215,7 +215,7 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         GlobalSystemMediaTransportControlsSessionPlaybackStatus,
     };
 
-    fn visible_window_titles() -> String {
+    fn relevant_window_titles(media_title: &str) -> String {
         use windows::{
             core::BOOL,
             Win32::{
@@ -239,10 +239,25 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             BOOL::from(true)
         }
 
-        let mut titles = Vec::new();
+        let mut titles: Vec<String> = Vec::new();
         let parameter = LPARAM((&mut titles as *mut Vec<String>) as isize);
         let _ = unsafe { EnumWindows(Some(collect_title), parameter) };
-        titles.join(" ")
+
+        let normalized_media_title = media_title.trim().to_lowercase();
+        let matching_titles = titles
+            .iter()
+            .filter(|title| {
+                !normalized_media_title.is_empty()
+                    && title.to_lowercase().contains(&normalized_media_title)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if matching_titles.is_empty() {
+            titles.join(" ")
+        } else {
+            matching_titles.join(" ")
+        }
     }
 
     fn identify_windows_source(source_app_id: &str, metadata: &str, window_titles: &str) -> String {
@@ -263,6 +278,7 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             ("tidal", "TIDAL"),
             ("youtube music", "YouTube Music"),
             ("youtubemusic", "YouTube Music"),
+            ("youtube", "YouTube"),
             ("applemusic", "Apple Music"),
             ("apple music", "Apple Music"),
             ("itunes", "Apple Music"),
@@ -289,21 +305,7 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         }
 
         let normalized_app_id = source_app_id.to_lowercase();
-        let browser_identifiers = ["chrome", "msedge", "firefox", "brave", "vivaldi", "opera"];
-        if browser_identifiers
-            .iter()
-            .any(|browser| normalized_app_id.contains(browser))
-        {
-            let normalized_window_titles = window_titles.to_lowercase();
-            if let Some((_, label)) = streaming_services
-                .iter()
-                .find(|(identifier, _)| normalized_window_titles.contains(identifier))
-            {
-                return (*label).to_owned();
-            }
-        }
-
-        let known_players = [
+        let local_players = [
             ("vlc", "VLC"),
             ("wmplayer", "Windows Media Player"),
             ("zunemusic", "Media Player"),
@@ -313,15 +315,41 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             ("aimp", "AIMP"),
             ("winamp", "Winamp"),
             ("mpv", "MPV"),
+        ];
+
+        if let Some((_, label)) = local_players
+            .iter()
+            .find(|(identifier, _)| normalized_app_id.contains(identifier))
+        {
+            return (*label).to_owned();
+        }
+
+        // No Windows, navegadores podem publicar apenas um AUMID genérico ou
+        // gerado, sem mencionar Chrome/Edge/Firefox. O título da janela ainda
+        // contém normalmente o nome do serviço (por exemplo, "- YouTube").
+        let normalized_window_titles = window_titles.to_lowercase();
+        if let Some((_, label)) = streaming_services
+            .iter()
+            .find(|(identifier, _)| normalized_window_titles.contains(identifier))
+        {
+            return (*label).to_owned();
+        }
+
+        let browsers = [
             ("chrome", "Google Chrome"),
+            ("chromium", "Chromium"),
             ("msedge", "Microsoft Edge"),
             ("firefox", "Mozilla Firefox"),
             ("brave", "Brave"),
             ("vivaldi", "Vivaldi"),
             ("opera", "Opera"),
+            ("librewolf", "LibreWolf"),
+            ("waterfox", "Waterfox"),
+            ("floorp", "Floorp"),
+            ("zen", "Zen Browser"),
         ];
 
-        if let Some((_, label)) = known_players
+        if let Some((_, label)) = browsers
             .iter()
             .find(|(identifier, _)| normalized_app_id.contains(identifier))
         {
@@ -368,7 +396,8 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             .map(|value| value.to_string())
             .unwrap_or_default();
         let metadata = format!("{title} {artist} {subtitle} {album_title}");
-        let source = identify_windows_source(&source_app_id, &metadata, &visible_window_titles());
+        let source =
+            identify_windows_source(&source_app_id, &metadata, &relevant_window_titles(&title));
 
         Ok(Some(MediaInfo {
             title,
