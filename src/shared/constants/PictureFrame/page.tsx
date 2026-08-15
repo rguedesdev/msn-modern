@@ -26,6 +26,7 @@ interface PictureFrameProps {
   frame?: PictureFrameKey;
   imageSrc?: string;
   imageAlt?: string;
+  imageSize?: number;
   fallback?: ReactNode;
 }
 
@@ -33,6 +34,7 @@ function PictureFrame({
   frame = "frias",
   imageSrc = ProfilePicture,
   imageAlt = "Profile Picture",
+  imageSize = 100,
   fallback,
 }: PictureFrameProps) {
 
@@ -53,7 +55,8 @@ function PictureFrame({
       />
       {fallback ?? (
         <img
-          className="relative z-10 block h-[100px] w-[100px] rounded-lg object-cover"
+          className="relative z-10 block rounded-lg object-cover"
+          style={{ height: imageSize, width: imageSize }}
           src={imageSrc}
           alt={imageAlt}
         />

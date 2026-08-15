@@ -49,12 +49,42 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         let searchable_source = format!("{service_name} {identity} {media_url}").to_lowercase();
         let player_identity = format!("{service_name} {identity}").to_lowercase();
 
+        if searchable_source.contains("asiadreamradio.torontocast.stream")
+            || searchable_source.contains("asiadreamradio.com")
+        {
+            let asia_dream_channels = [
+                ("japanhitsplayer", "Asia DREAM Radio — Japan Hits"),
+                ("jpowerplayer", "Asia DREAM Radio — J-Pop Powerplay"),
+                ("jkawaiiplayer", "Asia DREAM Radio — J-Pop Powerplay Kawaii"),
+                ("natsukashiiplayer", "Asia DREAM Radio — J-Sakura"),
+                ("jrockplayer", "Asia DREAM Radio — J-Rock Powerplay"),
+                ("jclubplayer", "Asia DREAM Radio — J-Club Powerplay HipHop"),
+                ("jazzbandplayer", "Asia DREAM Radio — Jazz Sakura"),
+            ];
+
+            return Some(
+                asia_dream_channels
+                    .iter()
+                    .find(|(identifier, _)| searchable_source.contains(identifier))
+                    .map(|(_, label)| *label)
+                    .unwrap_or("Asia DREAM Radio")
+                    .to_owned(),
+            );
+        }
+
         let streaming_services = [
             ("spotify", "Spotify"),
             ("music.amazon.", "Amazon Music"),
             ("amazon music", "Amazon Music"),
             ("deezer.com", "Deezer"),
             ("deezer", "Deezer"),
+            ("kissfm.com.br", "Kiss FM"),
+            ("kissfm", "Kiss FM"),
+            ("kiss fm", "Kiss FM"),
+            ("radiojhero.com", "Rádio J-Hero"),
+            ("radiorock.com.br", "89 A Rádio Rock"),
+            ("89fm.com.br", "89 A Rádio Rock"),
+            ("radio_89fm", "89 A Rádio Rock"),
             ("tidal.com", "TIDAL"),
             ("tidal", "TIDAL"),
             ("music.youtube.com", "YouTube Music"),

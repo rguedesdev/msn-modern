@@ -12,6 +12,7 @@ import { useSearchParams } from "react-router-dom";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { UserAttentionType } from "@tauri-apps/api/window";
 
 // Componentes
 import { PictureFrame } from "../../shared/constants/PictureFrame/page";
@@ -25,6 +26,7 @@ import {
 import {
   MdClose,
   MdCropSquare,
+  MdKeyboardArrowDown,
   MdMinimize,
   MdOutlineVideoChat,
   MdVoiceChat,
@@ -33,32 +35,64 @@ import { FaMicrophoneAlt, FaHeadphonesAlt } from "react-icons/fa";
 
 // Imagens e Sons
 import NudgeIconComparison from "../../assets/images/msn-nudge-icon-2.png";
-import SmileIcon from "../../assets/images/regular-smile-transparent.png";
-import WinkSmileIcon from "../../assets/images/wink-smile.png";
-import WritingEyesIcon from "../../assets/images/writing-eyes-brown.png";
-import AngrySmileIcon from "../../assets/images/angry-smile.png";
-import NerdSmileIcon from "../../assets/images/nerd-smile.png";
-import NeutralSmileIcon from "../../assets/images/neutral-smile.png";
-import SurpriseSmileIcon from "../../assets/images/surprise-smile.png";
-import SickSmileIcon from "../../assets/images/sick-smile.png";
-import SuspectSmileIcon from "../../assets/images/suspect-smile.png";
-import BoredSmileIcon from "../../assets/images/bored-smile.png";
-import AnnoyedSmileIcon from "../../assets/images/annoyed-smile.png";
-import AngelSmileIcon from "../../assets/images/angel-smile.png";
-import OmgSmileIcon from "../../assets/images/omg-smile.png";
-import RedSmileIcon from "../../assets/images/red-smile.png";
-import SadSmileIcon from "../../assets/images/sad-smile.png";
-import ShadesSmileIcon from "../../assets/images/shades-smile.png";
-import TeethSmileIcon from "../../assets/images/teeth-smile.png";
-import ConfusedSmileIcon from "../../assets/images/confused-smile.png";
-import TongueSmileIcon from "../../assets/images/tongue-smile.png";
-import WhatFaceIcon from "../../assets/images/what-face.png";
-import DevilSmileIcon from "../../assets/images/devil-smile.png";
-import DarkSmileIcon from "../../assets/images/dark-smile.jpg";
-import DarkAngryIcon from "../../assets/images/dark-angry.jpg";
+import SmileIcon from "../../assets/images/emoticons/defaulty/regular-smile-transparent.png";
+import WinkSmileIcon from "../../assets/images/emoticons/defaulty/wink-smile.png";
+import WritingEyesIcon from "../../assets/images/emoticons/defaulty/writing-eyes-brown.png";
+import AngrySmileIcon from "../../assets/images/emoticons/defaulty/angry-smile.png";
+import NerdSmileIcon from "../../assets/images/emoticons/defaulty/nerd-smile.png";
+import NeutralSmileIcon from "../../assets/images/emoticons/defaulty/neutral-smile.png";
+import SurpriseSmileIcon from "../../assets/images/emoticons/defaulty/surprise-smile.png";
+import SickSmileIcon from "../../assets/images/emoticons/defaulty/sick-smile.png";
+import SuspectSmileIcon from "../../assets/images/emoticons/defaulty/suspect-smile.png";
+import BoredSmileIcon from "../../assets/images/emoticons/defaulty/bored-smile.png";
+import AnnoyedSmileIcon from "../../assets/images/emoticons/defaulty/annoyed-smile.png";
+import AngelSmileIcon from "../../assets/images/emoticons/defaulty/angel-smile.png";
+import OmgSmileIcon from "../../assets/images/emoticons/defaulty/omg-smile.png";
+import RedSmileIcon from "../../assets/images/emoticons/defaulty/red-smile.png";
+import SadSmileIcon from "../../assets/images/emoticons/defaulty/sad-smile.png";
+import ShadesSmileIcon from "../../assets/images/emoticons/defaulty/shades-smile.png";
+import TeethSmileIcon from "../../assets/images/emoticons/defaulty/teeth-smile.png";
+import ConfusedSmileIcon from "../../assets/images/emoticons/defaulty/confused-smile.png";
+import TongueSmileIcon from "../../assets/images/emoticons/defaulty/tongue-smile.png";
+import WhatFaceIcon from "../../assets/images/emoticons/defaulty/what-face.png";
+import DevilSmileIcon from "../../assets/images/emoticons/defaulty/devil-smile.png";
+import DarkSmileIcon from "../../assets/images/emoticons/dark/dark-smile.jpg";
+import DarkAngryIcon from "../../assets/images/emoticons/dark/dark-angry.jpg";
+import Dark02Icon from "../../assets/images/emoticons/dark/02.jpg";
+import Dark03Icon from "../../assets/images/emoticons/dark/03.jpg";
+import Dark04Icon from "../../assets/images/emoticons/dark/04.jpg";
+import Dark05Icon from "../../assets/images/emoticons/dark/05.jpg";
+import Dark06Icon from "../../assets/images/emoticons/dark/06.jpg";
+import Dark08Icon from "../../assets/images/emoticons/dark/08.jpg";
+import Dark09Icon from "../../assets/images/emoticons/dark/09.jpg";
+import Dark10Icon from "../../assets/images/emoticons/dark/10.jpg";
+import Dark11Icon from "../../assets/images/emoticons/dark/11.jpg";
+import Dark12Icon from "../../assets/images/emoticons/dark/12.jpg";
+import Dark13Icon from "../../assets/images/emoticons/dark/13.jpg";
+import Dark14Icon from "../../assets/images/emoticons/dark/14.jpg";
+import Dark15Icon from "../../assets/images/emoticons/dark/15.jpg";
+import Dark16Icon from "../../assets/images/emoticons/dark/16.jpg";
+import Dark17Icon from "../../assets/images/emoticons/dark/17.jpg";
+import Dark18Icon from "../../assets/images/emoticons/dark/18.jpg";
+import Dark19Icon from "../../assets/images/emoticons/dark/19.jpg";
+import Dark20Icon from "../../assets/images/emoticons/dark/20.jpg";
+import Dark21Icon from "../../assets/images/emoticons/dark/21.jpg";
+import Dark22Icon from "../../assets/images/emoticons/dark/22.jpg";
+import Dark27Icon from "../../assets/images/emoticons/dark/27.jpg";
+import OnionHeadInsultedIcon from "../../assets/images/emoticons/onion-head/insultedplz.gif";
+import OnionHeadComeAtMeIcon from "../../assets/images/emoticons/onion-head/comeatmeplz.gif";
+import OnionHeadHandsomeIcon from "../../assets/images/emoticons/onion-head/handsomeonionplz.gif";
+import OnionHeadHeroTimeIcon from "../../assets/images/emoticons/onion-head/herotimeplz.gif";
+import OnionHeadKaminaIcon from "../../assets/images/emoticons/onion-head/kaminaonionplz.gif";
+import OnionHeadRaceIcon from "../../assets/images/emoticons/onion-head/onionraceplz.gif";
+import OnionHeadSoccerIcon from "../../assets/images/emoticons/onion-head/onionsoccer1plz.gif";
+import OnionHeadSoccerRageIcon from "../../assets/images/emoticons/onion-head/soccerrageplz.gif";
+import OnionHeadSuperIcon from "../../assets/images/emoticons/onion-head/superonionplz.gif";
+import OnionHeadWhipIcon from "../../assets/images/emoticons/onion-head/whipplz.gif";
 import nudgeSound from "../../assets/sounds/nudge.mp3";
+import messageSound from "../../assets/sounds/msn-message.mp3";
 
-const EMOTICONS = [
+const STANDARD_EMOTICONS = [
   { code: ":)", src: SmileIcon, alt: "Smile" },
   { code: ";)", src: WinkSmileIcon, alt: "Wink" },
   { code: ":-#", src: WritingEyesIcon, alt: "Don't tell anyone" },
@@ -84,11 +118,129 @@ const EMOTICONS = [
   { code: "(6)", src: DevilSmileIcon, alt: "Devil" },
   { code: ":-*", src: SurpriseSmileIcon, alt: "Secret Telling" },
   { code: "(A)", src: AngelSmileIcon, alt: "Angel" },
+] as const;
+
+const DARK_EMOTICONS = [
   { code: "(darksmile)", src: DarkSmileIcon, alt: "Dark smile" },
   { code: "(darkangry)", src: DarkAngryIcon, alt: "Dark angry" },
+  { code: "(dark02)", src: Dark02Icon, alt: "Dark smile 02" },
+  { code: "(dark03)", src: Dark03Icon, alt: "Dark wink" },
+  { code: "(dark04)", src: Dark04Icon, alt: "Dark surprised" },
+  { code: "(dark05)", src: Dark05Icon, alt: "Dark tongue out" },
+  { code: "(dark06)", src: Dark06Icon, alt: "Dark cool" },
+  { code: "(dark08)", src: Dark08Icon, alt: "Dark worried" },
+  { code: "(dark09)", src: Dark09Icon, alt: "Dark blushing" },
+  { code: "(dark10)", src: Dark10Icon, alt: "Dark sad" },
+  { code: "(dark11)", src: Dark11Icon, alt: "Dark crying" },
+  { code: "(dark12)", src: Dark12Icon, alt: "Dark neutral" },
+  { code: "(dark13)", src: Dark13Icon, alt: "Dark angel" },
+  { code: "(dark14)", src: Dark14Icon, alt: "Dark furious" },
+  { code: "(dark15)", src: Dark15Icon, alt: "Dark sarcastic" },
+  { code: "(dark16)", src: Dark16Icon, alt: "Dark party" },
+  { code: "(dark17)", src: Dark17Icon, alt: "Dark sleepy" },
+  { code: "(dark18)", src: Dark18Icon, alt: "Dark confused" },
+  { code: "(dark19)", src: Dark19Icon, alt: "Dark nervous" },
+  { code: "(dark20)", src: Dark20Icon, alt: "Dark scared" },
+  { code: "(dark21)", src: Dark21Icon, alt: "Dark questioning" },
+  { code: "(dark22)", src: Dark22Icon, alt: "Dark side glance" },
+  { code: "(dark27)", src: Dark27Icon, alt: "Dark devil" },
+] as const;
+
+const ONION_HEAD_DISPLAY_SIZE = {
+  displayWidth: 50,
+  displayHeight: 50,
+} as const;
+
+const ONION_HEAD_EMOTICONS = [
+  {
+    code: "(onioninsulted)",
+    src: OnionHeadInsultedIcon,
+    alt: "Onion Head insultado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncomeatme)",
+    src: OnionHeadComeAtMeIcon,
+    alt: "Onion Head venha me enfrentar",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhandsome)",
+    src: OnionHeadHandsomeIcon,
+    alt: "Onion Head charmoso",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionherotime)",
+    src: OnionHeadHeroTimeIcon,
+    alt: "Onion Head herói",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionkamina)",
+    src: OnionHeadKaminaIcon,
+    alt: "Onion Head Kamina",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrace)",
+    src: OnionHeadRaceIcon,
+    alt: "Onion Head corrida",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsoccer)",
+    src: OnionHeadSoccerIcon,
+    alt: "Onion Head futebol",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsoccerrage)",
+    src: OnionHeadSoccerRageIcon,
+    alt: "Onion Head futebol furioso",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsuper)",
+    src: OnionHeadSuperIcon,
+    alt: "Super Onion Head",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionwhip)",
+    src: OnionHeadWhipIcon,
+    alt: "Onion Head chicote",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+] as const;
+
+const EXCLUSIVE_EMOTICON_PACKS = [
+  {
+    id: "dark",
+    name: "Dark",
+    emoticons: DARK_EMOTICONS,
+  },
+  {
+    id: "onion-head",
+    name: "Onion Head",
+    emoticons: ONION_HEAD_EMOTICONS,
+  },
+] as const;
+
+const EMOTICONS = [
+  ...STANDARD_EMOTICONS,
+  ...DARK_EMOTICONS,
+  ...ONION_HEAD_EMOTICONS,
 ] as const;
 
 type EmoticonCode = (typeof EMOTICONS)[number]["code"];
+type EmoticonPickerTab = "standard" | "exclusive";
+
+const EDITOR_CARET_ANCHOR = "\u200B";
+const MINIMIZED_MESSAGE_DELAY_MS = 5_000;
+const MINIMIZED_TEST_MESSAGE = "Esta é uma mensagem de teste.";
+const TASKBAR_BLINK_INTERVAL_MS = 600;
+const TASKBAR_BLINK_DURATION_MS = TASKBAR_BLINK_INTERVAL_MS * 7;
 
 const EMOTICON_PATTERN = new RegExp(
   `(${EMOTICONS.map((emoticon) =>
@@ -106,7 +258,9 @@ function MessageContent({ text }: { text: string }) {
         key={`${part}-${index}`}
         src={emoticon.src}
         alt={emoticon.alt}
-        className="mx-0.5 inline-block h-7 w-7 align-middle object-contain"
+        width={"displayWidth" in emoticon ? emoticon.displayWidth : 28}
+        height={"displayHeight" in emoticon ? emoticon.displayHeight : 28}
+        className="mx-0.5 inline-block max-w-none align-middle object-contain"
       />
     ) : (
       part
@@ -121,8 +275,10 @@ function createEditorEmoticon(code: EmoticonCode) {
   image.alt = emoticon.alt;
   image.dataset.emoticon = emoticon.code;
   image.contentEditable = "false";
+  image.width = "displayWidth" in emoticon ? emoticon.displayWidth : 28;
+  image.height = "displayHeight" in emoticon ? emoticon.displayHeight : 28;
   image.className =
-    "mx-0.5 inline-block h-7 w-7 align-middle object-contain select-none";
+    "mx-0.5 inline-block max-w-none align-middle object-contain select-none";
   return image;
 }
 
@@ -174,6 +330,34 @@ function placeCaretAtEnd(editor: HTMLDivElement) {
   selection?.addRange(range);
 }
 
+function placeCaretAfterNode(node: Node) {
+  const parent = node.parentNode;
+  if (!parent) return null;
+
+  let caretNode = node.nextSibling;
+
+  if (caretNode?.nodeType !== Node.TEXT_NODE) {
+    caretNode = document.createTextNode(EDITOR_CARET_ANCHOR);
+    parent.insertBefore(caretNode, node.nextSibling);
+  } else if (!caretNode.textContent) {
+    caretNode.textContent = EDITOR_CARET_ANCHOR;
+  }
+
+  const range = document.createRange();
+  range.setStart(caretNode, 0);
+  range.collapse(true);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
+  return range;
+}
+
+function isEditorEmoticon(node: Node | null): node is HTMLImageElement {
+  return node instanceof HTMLImageElement && Boolean(node.dataset.emoticon);
+}
+
 function formatReceivedAt(receivedAt: number) {
   const date = new Date(receivedAt);
   const formattedDate = new Intl.DateTimeFormat("pt-BR", {
@@ -194,6 +378,13 @@ function ChatWindow() {
   const { id } = useParams();
   const [isNudging, setIsNudging] = useState(false);
   const [isEmoticonPickerOpen, setIsEmoticonPickerOpen] = useState(false);
+  const [activeEmoticonTab, setActiveEmoticonTab] =
+    useState<EmoticonPickerTab>("standard");
+  const [activeExclusivePackId, setActiveExclusivePackId] = useState<string>(
+    EXCLUSIVE_EMOTICON_PACKS[0]?.id ?? "",
+  );
+  const [isExclusivePackMenuOpen, setIsExclusivePackMenuOpen] =
+    useState(false);
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const [isVideoCallExpanded, setIsVideoCallExpanded] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<
@@ -210,13 +401,43 @@ function ChatWindow() {
     id ? getChatMessages(id) : [],
   );
   const messageInputRef = useRef<HTMLDivElement>(null);
+  const emoticonPickerRef = useRef<HTMLDivElement>(null);
   const editorSelectionRef = useRef<Range | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const chatSurfaceRef = useRef<HTMLDivElement>(null);
   const messageComposerRef = useRef<HTMLDivElement>(null);
   const hasPositionedInitialMessagesRef = useRef(false);
   const nudgeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const messageAudioRef = useRef<HTMLAudioElement | null>(null);
+  const minimizedMessageTimerRef = useRef<number | undefined>(undefined);
+  const taskbarBlinkIntervalRef = useRef<number | undefined>(undefined);
+  const taskbarBlinkEndTimerRef = useRef<number | undefined>(undefined);
+  const isTaskbarHighlightedRef = useRef(false);
   const appWindow = useMemo(() => getCurrentWebviewWindow(), []);
+  const activeExclusivePack =
+    EXCLUSIVE_EMOTICON_PACKS.find(
+      (pack) => pack.id === activeExclusivePackId,
+    ) ?? EXCLUSIVE_EMOTICON_PACKS[0];
+
+  useEffect(() => {
+    if (!isEmoticonPickerOpen) return;
+
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !emoticonPickerRef.current?.contains(target)
+      ) {
+        setIsEmoticonPickerOpen(false);
+        setIsExclusivePackMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointerDown);
+    };
+  }, [isEmoticonPickerOpen]);
 
   useEffect(() => {
     const previousHtmlBackground = document.documentElement.style.background;
@@ -391,7 +612,119 @@ function ChatWindow() {
     );
     setMessage("");
     messageInputRef.current?.replaceChildren();
+    editorSelectionRef.current = null;
   };
+
+  const applyTaskbarHighlight = useCallback(
+    (highlighted: boolean) => {
+      isTaskbarHighlightedRef.current = highlighted;
+      const attentionType = highlighted
+        ? UserAttentionType.Informational
+        : null;
+
+      void appWindow.requestUserAttention(attentionType).catch((error) => {
+        console.error("Erro ao alterar o destaque da conversa:", error);
+      });
+      void invoke("set_kwin_window_attention", {
+        windowTitle: `Conversa com ${contactName}`,
+        attention: highlighted,
+      }).catch((error) => {
+        console.error("Erro ao alternar o destaque no KWin:", error);
+      });
+    },
+    [appWindow, contactName],
+  );
+
+  const stopTaskbarBlinkTimers = useCallback(() => {
+    if (taskbarBlinkIntervalRef.current !== undefined) {
+      window.clearInterval(taskbarBlinkIntervalRef.current);
+      taskbarBlinkIntervalRef.current = undefined;
+    }
+    if (taskbarBlinkEndTimerRef.current !== undefined) {
+      window.clearTimeout(taskbarBlinkEndTimerRef.current);
+      taskbarBlinkEndTimerRef.current = undefined;
+    }
+  }, []);
+
+  const clearTaskbarHighlight = useCallback(() => {
+    stopTaskbarBlinkTimers();
+    applyTaskbarHighlight(false);
+  }, [applyTaskbarHighlight, stopTaskbarBlinkTimers]);
+
+  const fixTaskbarHighlight = useCallback(() => {
+    stopTaskbarBlinkTimers();
+    applyTaskbarHighlight(true);
+  }, [applyTaskbarHighlight, stopTaskbarBlinkTimers]);
+
+  const blinkTaskbarInAmber = useCallback(() => {
+    stopTaskbarBlinkTimers();
+    applyTaskbarHighlight(true);
+    taskbarBlinkIntervalRef.current = window.setInterval(() => {
+      applyTaskbarHighlight(!isTaskbarHighlightedRef.current);
+    }, TASKBAR_BLINK_INTERVAL_MS);
+    taskbarBlinkEndTimerRef.current = window.setTimeout(
+      fixTaskbarHighlight,
+      TASKBAR_BLINK_DURATION_MS,
+    );
+  }, [applyTaskbarHighlight, fixTaskbarHighlight, stopTaskbarBlinkTimers]);
+
+  const playMessageNotificationSound = useCallback(() => {
+    const audio = messageAudioRef.current;
+    if (!audio) return;
+
+    audio.pause();
+    audio.currentTime = 0;
+    void audio.play().catch((error) => {
+      console.error("Erro ao reproduzir o som de nova mensagem:", error);
+    });
+  }, []);
+
+  const handleMinimizeConversation = () => {
+    if (minimizedMessageTimerRef.current !== undefined) {
+      window.clearTimeout(minimizedMessageTimerRef.current);
+    }
+
+    minimizedMessageTimerRef.current = window.setTimeout(() => {
+      const receivedAt = Date.now();
+      const testMessage: ChatMessage = {
+        id: receivedAt,
+        author: "contact",
+        text: MINIMIZED_TEST_MESSAGE,
+        receivedAt,
+      };
+
+      setMessages((currentMessages) =>
+        id
+          ? appendChatMessage(id, testMessage)
+          : [...currentMessages, testMessage],
+      );
+      minimizedMessageTimerRef.current = undefined;
+      blinkTaskbarInAmber();
+      playMessageNotificationSound();
+    }, MINIMIZED_MESSAGE_DELAY_MS);
+
+    void appWindow.minimize();
+  };
+
+  useEffect(() => {
+    let unlistenFocusChanged: (() => void) | undefined;
+
+    void appWindow
+      .onFocusChanged(({ payload: isFocused }) => {
+        if (isFocused) clearTaskbarHighlight();
+      })
+      .then((unlisten) => {
+        unlistenFocusChanged = unlisten;
+      });
+
+    return () => {
+      if (minimizedMessageTimerRef.current !== undefined) {
+        window.clearTimeout(minimizedMessageTimerRef.current);
+      }
+      unlistenFocusChanged?.();
+      clearTaskbarHighlight();
+    };
+  }, [appWindow, clearTaskbarHighlight]);
 
   const saveEditorSelection = () => {
     const editor = messageInputRef.current;
@@ -412,10 +745,13 @@ function ChatWindow() {
 
     editor.focus();
 
-    const selection = window.getSelection();
-    const range = editorSelectionRef.current ?? document.createRange();
+    const savedRange = editorSelectionRef.current;
+    const hasValidSavedRange = Boolean(
+      savedRange && editor.contains(savedRange.commonAncestorContainer),
+    );
+    const range = hasValidSavedRange ? savedRange! : document.createRange();
 
-    if (!editorSelectionRef.current) {
+    if (!hasValidSavedRange) {
       range.selectNodeContents(editor);
       range.collapse(false);
     }
@@ -423,14 +759,30 @@ function ChatWindow() {
     const emoticon = createEditorEmoticon(code);
     range.deleteContents();
     range.insertNode(emoticon);
-    range.setStartAfter(emoticon);
-    range.collapse(true);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    editorSelectionRef.current = range.cloneRange();
+    const caretRange = placeCaretAfterNode(emoticon);
+    editorSelectionRef.current = caretRange?.cloneRange() ?? null;
 
     setMessage(serializeEditorContent(editor));
     setIsEmoticonPickerOpen(false);
+
+    window.requestAnimationFrame(() => {
+      const currentRange = editorSelectionRef.current;
+      if (!editor.isConnected || !currentRange) return;
+
+      editor.focus();
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(currentRange);
+    });
+  };
+
+  const handleToggleEmoticonPicker = () => {
+    if (!isEmoticonPickerOpen) {
+      setActiveEmoticonTab("standard");
+      setIsExclusivePackMenuOpen(false);
+    }
+
+    setIsEmoticonPickerOpen((isOpen) => !isOpen);
   };
 
   useLayoutEffect(() => {
@@ -460,6 +812,19 @@ function ChatWindow() {
     return () => {
       audio.pause();
       nudgeAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const audio = new Audio(messageSound);
+    audio.preload = "auto";
+    audio.volume = 1;
+    audio.load();
+    messageAudioRef.current = audio;
+
+    return () => {
+      audio.pause();
+      messageAudioRef.current = null;
     };
   }, []);
 
@@ -733,7 +1098,7 @@ function ChatWindow() {
               type="button"
               aria-label="Minimizar conversa"
               title="Minimizar"
-              onClick={() => void appWindow.minimize()}
+              onClick={handleMinimizeConversation}
               className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
             >
               <MdMinimize size={17} />
@@ -882,7 +1247,72 @@ function ChatWindow() {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     handleSendMessage();
+                    return;
                   }
+
+                  if (event.key !== "Backspace" && event.key !== "Delete") {
+                    return;
+                  }
+
+                  const editor = event.currentTarget;
+                  const selection = window.getSelection();
+                  if (!selection?.rangeCount || !selection.isCollapsed) return;
+
+                  const range = selection.getRangeAt(0);
+                  const container = range.startContainer;
+                  const offset = range.startOffset;
+                  let emoticonToDelete: Node | null = null;
+
+                  if (container.nodeType === Node.TEXT_NODE) {
+                    const text = container.textContent ?? "";
+
+                    if (event.key === "Backspace") {
+                      const textBeforeCaret = text
+                        .slice(0, offset)
+                        .replaceAll(EDITOR_CARET_ANCHOR, "");
+                      if (!textBeforeCaret) {
+                        emoticonToDelete = container.previousSibling;
+                      }
+                    } else {
+                      const textAfterCaret = text
+                        .slice(offset)
+                        .replaceAll(EDITOR_CARET_ANCHOR, "");
+                      if (!textAfterCaret) {
+                        emoticonToDelete = container.nextSibling;
+                      }
+                    }
+                  } else if (container === editor) {
+                    const adjacentIndex =
+                      event.key === "Backspace" ? offset - 1 : offset;
+                    emoticonToDelete =
+                      adjacentIndex >= 0
+                        ? editor.childNodes.item(adjacentIndex)
+                        : null;
+                  }
+
+                  if (!isEditorEmoticon(emoticonToDelete)) return;
+
+                  event.preventDefault();
+                  emoticonToDelete.remove();
+
+                  if (container.nodeType === Node.TEXT_NODE) {
+                    range.setStart(container, 0);
+                  } else {
+                    const nextOffset =
+                      event.key === "Backspace" ? offset - 1 : offset;
+                    range.setStart(
+                      editor,
+                      Math.max(
+                        0,
+                        Math.min(nextOffset, editor.childNodes.length),
+                      ),
+                    );
+                  }
+                  range.collapse(true);
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+                  editorSelectionRef.current = range.cloneRange();
+                  setMessage(serializeEditorContent(editor));
                 }}
                 className="h-full overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm text-[#304f60] outline-none"
               />
@@ -892,12 +1322,8 @@ function ChatWindow() {
               {/* Caixa de Ações */}
               <div className="flex items-center">
                 <div
+                  ref={emoticonPickerRef}
                   className="relative"
-                  onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget)) {
-                      setIsEmoticonPickerOpen(false);
-                    }
-                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Escape") {
                       setIsEmoticonPickerOpen(false);
@@ -910,7 +1336,7 @@ function ChatWindow() {
                     aria-expanded={isEmoticonPickerOpen}
                     aria-haspopup="dialog"
                     onMouseDown={saveEditorSelection}
-                    onClick={() => setIsEmoticonPickerOpen((isOpen) => !isOpen)}
+                    onClick={handleToggleEmoticonPicker}
                     className={`rounded-md border border-transparent p-1.5 transition-colors hover:border-white hover:bg-white/70 ${
                       isEmoticonPickerOpen ? "border-white bg-white/80" : ""
                     }`}
@@ -927,27 +1353,200 @@ function ChatWindow() {
                     <div
                       role="dialog"
                       aria-label="Selecionar emoticon"
-                      className="absolute bottom-full left-0 z-40 mb-2 w-max rounded-[10px] border border-[#7faec4] bg-gradient-to-b from-[#f8fdff] to-[#e3f3fa] p-2 shadow-[0_10px_30px_rgba(35,76,98,0.24)]"
+                      className="absolute bottom-full left-0 z-40 mb-2 h-[198px] w-[380px] rounded-[10px] border border-[#7faec4] bg-gradient-to-b from-[#f8fdff] to-[#e3f3fa] p-2 shadow-[0_10px_30px_rgba(35,76,98,0.24)]"
                     >
-                      <p className="mb-2 border-b border-[#c8dfe9] px-1 pb-1.5 text-xs font-semibold text-[#52758a]">
-                        Emoticons
-                      </p>
-                      <div className="grid grid-flow-col grid-rows-3 gap-1">
-                        {EMOTICONS.map((emoticon) => (
-                          <button
-                            key={emoticon.code}
-                            type="button"
-                            aria-label={`Inserir ${emoticon.alt.toLowerCase()}`}
-                            onClick={() => handleSelectEmoticon(emoticon.code)}
-                            className="flex h-11 w-11 items-center justify-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-[#65afd0]/50"
+                      <div
+                        role="tablist"
+                        aria-label="Categorias de emoticons"
+                        className="relative mb-2 grid grid-cols-2 border-b border-[#b9d5e1] px-1"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute -bottom-px left-0 h-0.5 w-1/2 transition-transform duration-300 ease-out"
+                          style={{
+                            transform: `translateX(${activeEmoticonTab === "exclusive" ? 100 : 0}%)`,
+                          }}
+                        >
+                          <span className="mx-auto block h-full w-[76%] rounded-full bg-[#3295c2]" />
+                        </span>
+
+                        <button
+                          id="emoticon-tab-standard"
+                          type="button"
+                          role="tab"
+                          aria-selected={activeEmoticonTab === "standard"}
+                          aria-controls="emoticon-panel-standard"
+                          onClick={() => {
+                            setActiveEmoticonTab("standard");
+                            setIsExclusivePackMenuOpen(false);
+                          }}
+                          className={`px-3 py-1.5 text-xs font-semibold transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#65afd0]/50 ${
+                            activeEmoticonTab === "standard"
+                              ? "text-[#287da5]"
+                              : "text-[#7894a2] hover:bg-white/45 hover:text-[#426b81]"
+                          }`}
+                        >
+                          Padrão
+                        </button>
+                        <button
+                          id="emoticon-tab-exclusive"
+                          type="button"
+                          role="tab"
+                          aria-selected={activeEmoticonTab === "exclusive"}
+                          aria-controls="emoticon-panel-exclusive"
+                          onClick={() => {
+                            setActiveEmoticonTab("exclusive");
+                            setIsExclusivePackMenuOpen(false);
+                          }}
+                          className={`px-3 py-1.5 text-xs font-semibold transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#65afd0]/50 ${
+                            activeEmoticonTab === "exclusive"
+                              ? "text-[#287da5]"
+                              : "text-[#7894a2] hover:bg-white/45 hover:text-[#426b81]"
+                          }`}
+                        >
+                          Exclusivos
+                        </button>
+                      </div>
+
+                      <div className="h-[140px] overflow-hidden">
+                        <div
+                          className="flex h-full w-[200%] transition-transform duration-300 ease-out"
+                          style={{
+                            transform: `translateX(${activeEmoticonTab === "exclusive" ? -50 : 0}%)`,
+                          }}
+                        >
+                          <div
+                            id="emoticon-panel-standard"
+                            role="tabpanel"
+                            aria-labelledby="emoticon-tab-standard"
+                            aria-hidden={activeEmoticonTab !== "standard"}
+                            className="grid h-full w-1/2 shrink-0 grid-cols-7 content-start gap-1"
                           >
-                            <img
-                              src={emoticon.src}
-                              alt={emoticon.alt}
-                              className="h-[30px] w-[30px] object-contain"
-                            />
-                          </button>
-                        ))}
+                            {STANDARD_EMOTICONS.map((emoticon) => (
+                              <button
+                                key={emoticon.code}
+                                type="button"
+                                tabIndex={
+                                  activeEmoticonTab === "standard" ? 0 : -1
+                                }
+                                aria-label={`Inserir ${emoticon.alt.toLowerCase()}`}
+                                onClick={() =>
+                                  handleSelectEmoticon(emoticon.code)
+                                }
+                                className="flex h-11 w-11 items-center justify-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65afd0]/50"
+                              >
+                                <img
+                                  src={emoticon.src}
+                                  alt={emoticon.alt}
+                                  className="h-[30px] w-[30px] object-contain"
+                                />
+                              </button>
+                            ))}
+                          </div>
+
+                          <div
+                            id="emoticon-panel-exclusive"
+                            role="tabpanel"
+                            aria-labelledby="emoticon-tab-exclusive"
+                            aria-hidden={activeEmoticonTab !== "exclusive"}
+                            className="flex h-full w-1/2 shrink-0 flex-col px-1"
+                          >
+                            <div className="relative z-10 mb-1.5 shrink-0 px-1">
+                              <button
+                                type="button"
+                                tabIndex={
+                                  activeEmoticonTab === "exclusive" ? 0 : -1
+                                }
+                                aria-haspopup="listbox"
+                                aria-expanded={isExclusivePackMenuOpen}
+                                onClick={() =>
+                                  setIsExclusivePackMenuOpen(
+                                    (isOpen) => !isOpen,
+                                  )
+                                }
+                                className={`inline-flex items-center gap-0.5 px-2 py-1 text-left text-xs font-semibold text-[#426b81] outline-none transition-all focus-visible:ring-2 focus-visible:ring-[#65afd0]/40 ${
+                                  isExclusivePackMenuOpen
+                                    ? "rounded-md border border-[#9dbdcc] bg-white/85 shadow-sm"
+                                    : "border border-transparent"
+                                }`}
+                              >
+                                <span>{activeExclusivePack.name}</span>
+                                <MdKeyboardArrowDown
+                                  aria-hidden="true"
+                                  size={17}
+                                  className={`text-[#6f91a2] transition-transform duration-200 ${
+                                    isExclusivePackMenuOpen ? "rotate-180" : ""
+                                  }`}
+                                />
+                              </button>
+
+                              {isExclusivePackMenuOpen && (
+                                <div
+                                  role="listbox"
+                                  aria-label="Selecionar pacote de emoticons"
+                                  className="absolute left-1 top-full mt-1 flex min-w-[140px] flex-col gap-1 overflow-hidden rounded-md border border-[#9dbdcc] bg-[#f8fdff] p-1 shadow-[0_6px_16px_rgba(35,76,98,0.2)]"
+                                >
+                                  {EXCLUSIVE_EMOTICON_PACKS.map((pack) => {
+                                    const isSelected =
+                                      pack.id === activeExclusivePack.id;
+
+                                    return (
+                                      <button
+                                        key={pack.id}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={isSelected}
+                                        onClick={() => {
+                                          setActiveExclusivePackId(pack.id);
+                                          setIsExclusivePackMenuOpen(false);
+                                        }}
+                                        className={`w-full rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                                          isSelected
+                                            ? "bg-[#dceef6] font-semibold text-[#287da5]"
+                                            : "text-[#52758a] hover:bg-[#e5f3f9] hover:text-[#287da5]"
+                                        }`}
+                                      >
+                                        {pack.name}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+
+                            <div
+                              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+                              aria-label={`Emoticons do pacote ${activeExclusivePack.name}`}
+                            >
+                              <div className="grid grid-cols-7 gap-1">
+                                {activeExclusivePack.emoticons.map(
+                                  (emoticon) => (
+                                    <button
+                                      key={emoticon.code}
+                                      type="button"
+                                      tabIndex={
+                                        activeEmoticonTab === "exclusive"
+                                          ? 0
+                                          : -1
+                                      }
+                                      aria-label={`Inserir ${emoticon.alt.toLowerCase()}`}
+                                      onClick={() =>
+                                        handleSelectEmoticon(emoticon.code)
+                                      }
+                                      className="flex h-11 w-11 items-center justify-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65afd0]/50"
+                                    >
+                                      <img
+                                        src={emoticon.src}
+                                        alt={emoticon.alt}
+                                        className="h-[30px] w-[30px] object-contain"
+                                      />
+                                    </button>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

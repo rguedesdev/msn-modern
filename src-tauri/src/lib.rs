@@ -6,6 +6,7 @@ use tauri::{
 };
 
 mod camera;
+mod kwin_attention;
 mod media_session;
 
 #[cfg(desktop)]
@@ -38,6 +39,7 @@ pub fn run() {
         .manage(camera::CameraManager::default())
         .invoke_handler(tauri::generate_handler![
             uses_wayland,
+            kwin_attention::set_kwin_window_attention,
             media_session::get_current_media,
             camera::start_native_camera,
             camera::stop_native_camera

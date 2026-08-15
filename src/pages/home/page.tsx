@@ -56,7 +56,11 @@ import {
 
 // Imagens
 import AnimeAds from "../../assets/images/ads-anime.jpg";
-import DeezerLogo from "../../assets/images/deezer-logo.svg";
+import Radio89Logo from "../../assets/images/streamings/89-radio-rock.png";
+import AsiaDreamRadioLogo from "../../assets/images/streamings/asia-dream-radio.jpg";
+import DeezerLogo from "../../assets/images/streamings/deezer-logo.svg";
+import KissFmLogo from "../../assets/images/streamings/kiss-fm-logo.svg";
+import RadioJHeroLogo from "../../assets/images/streamings/radio-jhero.png";
 import onlineSound from "../../assets/sounds/msn-online.mp3";
 import messageSound from "../../assets/sounds/msn-message.mp3";
 
@@ -84,8 +88,323 @@ interface MediaInfo {
   source: string;
 }
 
+const UNKNOWN_ARTIST = "Artista desconhecido";
+const KISS_FM_NOW_PLAYING_URL =
+  "https://np.tritondigital.com/public/nowplaying?mountName=RADIO_KISSFM&numberToFetch=1&eventType=track";
+const RADIO_J_HERO_NOW_PLAYING_URL =
+  "https://api.radiojhero.com/streaming/np";
+const RADIO_89_NOW_PLAYING_URL =
+  "https://players.gc2.com.br/cron/89fm/results.json";
+const ASIA_DREAM_CHANNELS = [
+  [
+    "j-pop powerplay kawaii",
+    "https://kathy.torontocast.com:2650/api/v2/history/?limit=1&offset=0&server=2",
+  ],
+  [
+    "j-pop powerplay",
+    "https://kathy.torontocast.com:2650/api/v2/history/?limit=1&offset=0&server=1",
+  ],
+  [
+    "j-club powerplay hiphop",
+    "https://kathy.torontocast.com:3310/api/v2/history/?limit=1&offset=0&server=5",
+  ],
+  [
+    "j-rock powerplay",
+    "https://kathy.torontocast.com:3310/api/v2/history/?limit=1&offset=0&server=4",
+  ],
+  [
+    "jazz sakura",
+    "https://kathy.torontocast.com:3310/api/v2/history/?limit=1&offset=0&server=1",
+  ],
+  [
+    "j-sakura",
+    "https://quincy.torontocast.com:1970/api/v2/history/?limit=1&offset=0&server=3",
+  ],
+  [
+    "japan hits",
+    "https://quincy.torontocast.com:1970/api/v2/history/?limit=1&offset=0&server=1",
+  ],
+] as const;
+const CANONICAL_UPPERCASE_ARTISTS: Record<string, string> = {
+  "AC/DC": "AC/DC",
+  ABBA: "ABBA",
+  HIM: "HIM",
+  INXS: "INXS",
+  REM: "R.E.M.",
+  "R.E.M.": "R.E.M.",
+  U2: "U2",
+  UB40: "UB40",
+  "ZZ TOP": "ZZ Top",
+};
+const KISS_FM_LOWERCASE_WORDS = new Set([
+  "a",
+  "à",
+  "ao",
+  "aos",
+  "an",
+  "and",
+  "as",
+  "às",
+  "at",
+  "but",
+  "by",
+  "com",
+  "da",
+  "das",
+  "de",
+  "do",
+  "dos",
+  "e",
+  "em",
+  "for",
+  "from",
+  "in",
+  "na",
+  "nas",
+  "no",
+  "nos",
+  "nor",
+  "o",
+  "of",
+  "on",
+  "or",
+  "os",
+  "ou",
+  "per",
+  "para",
+  "por",
+  "sem",
+  "the",
+  "to",
+  "um",
+  "uma",
+  "umas",
+  "uns",
+  "via",
+  "with",
+]);
+
+function normalizeKissFmText(value: string) {
+  const canonicalValue =
+    CANONICAL_UPPERCASE_ARTISTS[value.toLocaleUpperCase("pt-BR")];
+  if (canonicalValue) return canonicalValue;
+
+  return value
+    .trim()
+    .split(/\s+/)
+    .map((word, index) => {
+      const canonicalWord =
+        CANONICAL_UPPERCASE_ARTISTS[word.toLocaleUpperCase("pt-BR")];
+      if (canonicalWord) return canonicalWord;
+
+      const lowercaseWord = word.toLocaleLowerCase("pt-BR");
+      const comparableWord = lowercaseWord.replace(
+        /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,
+        "",
+      );
+      if (index > 0 && KISS_FM_LOWERCASE_WORDS.has(comparableWord)) {
+        return lowercaseWord;
+      }
+
+      return lowercaseWord.replace(
+        /(^|[-/])([^\p{L}]*)(\p{L})/gu,
+        (_, separator, prefix, initial) =>
+          `${separator}${prefix}${initial.toLocaleUpperCase("pt-BR")}`,
+      );
+    })
+    .join(" ");
+}
+
+async function getKissFmTrack() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 2_500);
+
+  try {
+    const response = await fetch(KISS_FM_NOW_PLAYING_URL, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+
+    const document = new DOMParser().parseFromString(
+      await response.text(),
+      "text/xml",
+    );
+    if (document.querySelector("parsererror")) return null;
+
+    const properties = Array.from(document.querySelectorAll("property"));
+    const getProperty = (name: string) =>
+      properties
+        .find((property) => property.getAttribute("name") === name)
+        ?.textContent?.trim();
+    const kissFmTitle = getProperty("cue_title");
+    const artist = getProperty("track_artist_name");
+
+    if (!kissFmTitle) return null;
+
+    return {
+      title: normalizeKissFmText(kissFmTitle),
+      artist: artist ? normalizeKissFmText(artist) : UNKNOWN_ARTIST,
+    };
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function getAsiaDreamTrack(source: string) {
+  const normalizedSource = source.toLowerCase();
+  const channel = ASIA_DREAM_CHANNELS.find(([name]) =>
+    normalizedSource.includes(name),
+  );
+  if (!channel) return null;
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 2_500);
+
+  try {
+    const response = await fetch(channel[1], {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      results?: Array<{
+        author?: string | null;
+        title?: string | null;
+        metadata?: string | null;
+      }>;
+    };
+    const currentTrack = data.results?.[0];
+    const metadata = currentTrack?.metadata?.trim() || "";
+    const metadataSeparator = metadata.indexOf(" - ");
+    const title =
+      currentTrack?.title?.trim() ||
+      (metadataSeparator >= 0
+        ? metadata.slice(metadataSeparator + 3).trim()
+        : metadata);
+    if (!title) return null;
+
+    return {
+      title,
+      artist:
+        currentTrack?.author?.trim() ||
+        (metadataSeparator >= 0
+          ? metadata.slice(0, metadataSeparator).trim()
+          : UNKNOWN_ARTIST),
+    };
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function getRadioJHeroTrack() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 2_500);
+
+  try {
+    const response = await fetch(RADIO_J_HERO_NOW_PLAYING_URL, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      song_history?: Array<{
+        artist?: string | null;
+        title?: string | null;
+      }>;
+    };
+    const currentTrack = data.song_history?.[0];
+    const title = currentTrack?.title?.trim();
+    if (!title) return null;
+
+    return {
+      title,
+      artist: currentTrack?.artist?.trim() || UNKNOWN_ARTIST,
+    };
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function getRadio89Track() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 2_500);
+
+  try {
+    const response = await fetch(RADIO_89_NOW_PLAYING_URL, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      musicas?: {
+        tocando?: {
+          singer?: string | null;
+          song?: string | null;
+        };
+      };
+    };
+    const currentTrack = data.musicas?.tocando;
+    const title = currentTrack?.song?.trim();
+    if (!title) return null;
+
+    return {
+      title,
+      artist: currentTrack?.singer?.trim() || UNKNOWN_ARTIST,
+    };
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 function formatMediaDescription(media: MediaInfo) {
   const normalizedSource = media.source.toLowerCase();
+
+  if (
+    normalizedSource.includes("kiss fm") &&
+    media.artist === UNKNOWN_ARTIST
+  ) {
+    return "Rádio Kiss FM ♫";
+  }
+
+  if (normalizedSource.includes("kiss fm")) {
+    return `${normalizeKissFmText(media.artist)} — ${normalizeKissFmText(media.title)} ♫`;
+  }
+
+  if (
+    normalizedSource.includes("asia dream radio") &&
+    media.artist === UNKNOWN_ARTIST
+  ) {
+    return `${media.source} ♫`;
+  }
+
+  if (
+    normalizedSource.includes("rádio j-hero") &&
+    media.artist === UNKNOWN_ARTIST
+  ) {
+    return "Rádio J-Hero ♫";
+  }
+
+  if (
+    normalizedSource.includes("89 a rádio rock") &&
+    (media.artist === UNKNOWN_ARTIST ||
+      (media.artist.toLowerCase() === "a rádio rock" &&
+        media.title.toLowerCase() === "89fm ao vivo"))
+  ) {
+    return "89 FM — A Rádio Rock ♫";
+  }
 
   if (
     normalizedSource.includes("soundcloud") ||
@@ -115,6 +434,48 @@ function MediaSourceIcon({ source }: { source: string }) {
         alt="Deezer"
         className="h-[16px] w-[16px] object-contain"
       />
+    );
+  }
+
+  if (normalizedSource.includes("kiss fm")) {
+    return (
+      <img
+        src={KissFmLogo}
+        alt="Kiss FM"
+        className="h-[18px] w-[18px] object-contain"
+      />
+    );
+  }
+
+  if (normalizedSource.includes("asia dream radio")) {
+    return (
+      <img
+        src={AsiaDreamRadioLogo}
+        alt="Asia DREAM Radio"
+        className="h-[18px] w-[18px] rounded-sm object-contain"
+      />
+    );
+  }
+
+  if (normalizedSource.includes("rádio j-hero")) {
+    return (
+      <img
+        src={RadioJHeroLogo}
+        alt="Rádio J-Hero"
+        className="h-[18px] w-[18px] rounded-sm object-contain"
+      />
+    );
+  }
+
+  if (normalizedSource.includes("89 a rádio rock")) {
+    return (
+      <span className="block h-[18px] w-[18px] overflow-hidden rounded-sm bg-black">
+        <img
+          src={Radio89Logo}
+          alt="89 A Rádio Rock"
+          className="h-full w-auto max-w-none object-contain object-left"
+        />
+      </span>
     );
   }
 
@@ -173,7 +534,12 @@ function MediaSourceIcon({ source }: { source: string }) {
     return <MdMusicNote aria-label={source} />;
   }
 
-  return <RiDiscFill aria-label={source || "Player de música"} />;
+  return (
+    <RiDiscFill
+      aria-label={source || "Player de música"}
+      className="text-black"
+    />
+  );
 }
 
 const INITIAL_CONTACTS: Contact[] = [
@@ -264,11 +630,75 @@ function HomePage() {
     }
 
     let isDisposed = false;
+    let radioTrackCache: {
+      source: string;
+      track: Pick<MediaInfo, "title" | "artist"> | null;
+      expiresAt: number;
+    } | null = null;
+
+    const enrichRadioMedia = async (media: MediaInfo) => {
+      const normalizedSource = media.source.toLowerCase();
+      const normalizedArtist = media.artist.toLowerCase();
+      const normalizedTitle = media.title.toLowerCase();
+      const isKissFm = normalizedSource.includes("kiss fm");
+      const isAsiaDreamRadio = normalizedSource.includes("asia dream radio");
+      const isRadioJHero = normalizedSource.includes("rádio j-hero");
+      const isRadio89 = normalizedSource.includes("89 a rádio rock");
+      const isRadio89Placeholder =
+        isRadio89 &&
+        (["a rádio rock", "89 - a rádio rock", "89 a rádio rock"].includes(
+          normalizedArtist,
+        ) ||
+          ["89fm ao vivo", "89 - a rádio rock", "89 a rádio rock"].includes(
+            normalizedTitle,
+          ));
+
+      if (
+        (!isKissFm && !isAsiaDreamRadio && !isRadioJHero && !isRadio89) ||
+        (media.artist !== UNKNOWN_ARTIST && !isRadio89Placeholder)
+      ) {
+        return media;
+      }
+
+      if (
+        radioTrackCache?.source === media.source &&
+        radioTrackCache.expiresAt > Date.now()
+      ) {
+        return radioTrackCache.track
+          ? { ...media, ...radioTrackCache.track }
+          : isRadio89Placeholder
+            ? { ...media, artist: UNKNOWN_ARTIST }
+            : media;
+      }
+
+      let track: Pick<MediaInfo, "title" | "artist"> | null;
+      if (isKissFm) {
+        track = await getKissFmTrack();
+      } else if (isAsiaDreamRadio) {
+        track = await getAsiaDreamTrack(media.source);
+      } else if (isRadio89) {
+        track = await getRadio89Track();
+      } else {
+        track = await getRadioJHeroTrack();
+      }
+      radioTrackCache = {
+        source: media.source,
+        track,
+        expiresAt: Date.now() + 15_000,
+      };
+
+      return track
+        ? { ...media, ...track }
+        : isRadio89Placeholder
+          ? { ...media, artist: UNKNOWN_ARTIST }
+          : media;
+    };
 
     const updateCurrentMedia = async () => {
       try {
         const media = await invoke<MediaInfo | null>("get_current_media");
-        if (!isDisposed) setCurrentMedia(media);
+        const enrichedMedia = media ? await enrichRadioMedia(media) : null;
+        if (!isDisposed) setCurrentMedia(enrichedMedia);
       } catch (error) {
         console.error("Erro ao consultar a mídia em reprodução:", error);
         if (!isDisposed) setCurrentMedia(null);
@@ -354,7 +784,7 @@ function HomePage() {
       contactId: contactBecameOnline.id,
       contactName: contactBecameOnline.name,
       kind: "online",
-      text: "acabou de ficar online.",
+      text: "acabou de entrar.",
     };
 
     void showStyledNotificationWindow(notification).catch((error) => {
@@ -379,7 +809,7 @@ function HomePage() {
             ? {
                 ...contact,
                 status: "online",
-                msg: "Acabou de ficar online",
+                msg: "Acabou de entrar",
               }
             : contact,
         ),
