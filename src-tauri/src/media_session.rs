@@ -207,7 +207,116 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
     Ok(None)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+fn read_current_media() -> Result<Option<MediaInfo>, String> {
+    use windows::Media::Control::{
+        GlobalSystemMediaTransportControlsSession,
+        GlobalSystemMediaTransportControlsSessionManager,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+    };
+
+    fn identify_windows_source(source_app_id: &str, metadata: &str) -> Option<String> {
+        let searchable_source = format!("{source_app_id} {metadata}").to_lowercase();
+        let streaming_services = [
+            ("spotify", "Spotify"),
+            ("amazonmusic", "Amazon Music"),
+            ("amazon music", "Amazon Music"),
+            ("deezer", "Deezer"),
+            ("kissfm", "Kiss FM"),
+            ("kiss fm", "Kiss FM"),
+            ("rádio j-hero", "Rádio J-Hero"),
+            ("radio j-hero", "Rádio J-Hero"),
+            ("radiojhero", "Rádio J-Hero"),
+            ("89fm", "89 A Rádio Rock"),
+            ("a rádio rock", "89 A Rádio Rock"),
+            ("a radio rock", "89 A Rádio Rock"),
+            ("tidal", "TIDAL"),
+            ("youtube music", "YouTube Music"),
+            ("youtubemusic", "YouTube Music"),
+            ("applemusic", "Apple Music"),
+            ("apple music", "Apple Music"),
+            ("itunes", "Apple Music"),
+            ("napster", "Napster"),
+            ("line music", "LINE MUSIC"),
+            ("linemusic", "LINE MUSIC"),
+            ("soundcloud", "SoundCloud"),
+            ("qobuz", "Qobuz"),
+            ("pandora", "Pandora"),
+            ("bandcamp", "Bandcamp"),
+            ("audiomack", "Audiomack"),
+            ("anghami", "Anghami"),
+            ("jiosaavn", "JioSaavn"),
+            ("boomplay", "Boomplay"),
+            ("asia dream radio", "Asia DREAM Radio"),
+            ("asiadreamradio", "Asia DREAM Radio"),
+        ];
+
+        streaming_services
+            .iter()
+            .find(|(identifier, _)| searchable_source.contains(identifier))
+            .map(|(_, label)| (*label).to_owned())
+    }
+
+    fn media_from_session(
+        session: &GlobalSystemMediaTransportControlsSession,
+    ) -> Result<Option<MediaInfo>, windows::core::Error> {
+        let playback_status = session.GetPlaybackInfo()?.PlaybackStatus()?;
+        if playback_status != GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+            return Ok(None);
+        }
+
+        let properties = session.TryGetMediaPropertiesAsync()?.join()?;
+        let title = properties.Title()?.to_string();
+        if title.trim().is_empty() {
+            return Ok(None);
+        }
+
+        let artist = properties.Artist()?.to_string();
+        let subtitle = properties.Subtitle()?.to_string();
+        let album_title = properties.AlbumTitle()?.to_string();
+        let source_app_id = session.SourceAppUserModelId()?.to_string();
+        let metadata = format!("{title} {artist} {subtitle} {album_title}");
+        let Some(source) = identify_windows_source(&source_app_id, &metadata) else {
+            return Ok(None);
+        };
+
+        Ok(Some(MediaInfo {
+            title,
+            artist: if artist.trim().is_empty() {
+                "Artista desconhecido".to_owned()
+            } else {
+                artist
+            },
+            source,
+        }))
+    }
+
+    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .and_then(|operation| operation.join())
+        .map_err(|error| format!("Não foi possível acessar as sessões de mídia: {error}"))?;
+    let sessions = manager
+        .GetSessions()
+        .map_err(|error| format!("Não foi possível listar as sessões de mídia: {error}"))?;
+
+    for index in 0..sessions
+        .Size()
+        .map_err(|error| format!("Não foi possível contar as sessões de mídia: {error}"))?
+    {
+        let session = match sessions.GetAt(index) {
+            Ok(session) => session,
+            Err(_) => continue,
+        };
+
+        match media_from_session(&session) {
+            Ok(Some(media)) => return Ok(Some(media)),
+            Ok(None) | Err(_) => continue,
+        }
+    }
+
+    Ok(None)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 fn read_current_media() -> Result<Option<MediaInfo>, String> {
     Ok(None)
 }
