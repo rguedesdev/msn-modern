@@ -227,7 +227,8 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
                 UI::{
                     Accessibility::{
                         CUIAutomation, IUIAutomation, IUIAutomationValuePattern,
-                        TreeScope_Descendants, UIA_EditControlTypeId, UIA_ValuePatternId,
+                        TreeScope_Descendants, UIA_EditControlTypeId, UIA_TabItemControlTypeId,
+                        UIA_ValuePatternId,
                     },
                     WindowsAndMessaging::{
                         EnumWindows, GetClassNameW, GetWindowTextW, IsWindowVisible,
@@ -270,7 +271,7 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             BOOL::from(true)
         }
 
-        fn browser_urls(handles: &[HWND]) -> Vec<String> {
+        fn browser_hints(handles: &[HWND]) -> Vec<String> {
             let initialization = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
             let should_uninitialize = initialization.is_ok();
 
@@ -283,7 +284,7 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
                     )?
                 };
                 let condition = unsafe { automation.CreateTrueCondition()? };
-                let mut urls = Vec::new();
+                let mut hints = Vec::new();
 
                 for &handle in handles {
                     let Ok(window) = (unsafe { automation.ElementFromHandle(handle) }) else {
@@ -300,23 +301,31 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
                         let Ok(element) = (unsafe { elements.GetElement(index) }) else {
                             continue;
                         };
-                        if unsafe { element.CurrentControlType() }.ok()
-                            != Some(UIA_EditControlTypeId)
-                        {
+                        let control_type = unsafe { element.CurrentControlType() }.ok();
+                        let name = unsafe { element.CurrentName() }
+                            .map(|value| value.to_string())
+                            .unwrap_or_default();
+
+                        if control_type == Some(UIA_TabItemControlTypeId) {
+                            if !name.trim().is_empty() {
+                                hints.push(name);
+                            }
+                            continue;
+                        }
+
+                        if control_type != Some(UIA_EditControlTypeId) {
                             continue;
                         }
 
                         let automation_id = unsafe { element.CurrentAutomationId() }
                             .map(|value| value.to_string().to_lowercase())
                             .unwrap_or_default();
-                        let name = unsafe { element.CurrentName() }
-                            .map(|value| value.to_string().to_lowercase())
-                            .unwrap_or_default();
+                        let normalized_name = name.to_lowercase();
                         let is_address_bar = automation_id == "view_1001"
                             || automation_id.contains("urlbar")
-                            || name.contains("address")
-                            || name.contains("endereço")
-                            || name.contains("endereco");
+                            || normalized_name.contains("address")
+                            || normalized_name.contains("endereço")
+                            || normalized_name.contains("endereco");
                         if !is_address_bar {
                             continue;
                         }
@@ -332,12 +341,12 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
                             .map(|value| value.to_string())
                             .unwrap_or_default();
                         if !value.trim().is_empty() {
-                            urls.push(value);
+                            hints.push(value);
                         }
                     }
                 }
 
-                Ok(urls)
+                Ok(hints)
             })();
 
             if should_uninitialize {
@@ -354,29 +363,68 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         let parameter = LPARAM((&mut windows as *mut BrowserWindows) as isize);
         let _ = unsafe { EnumWindows(Some(collect_title), parameter) };
 
+        let mut contexts = windows.titles;
+        contexts.extend(browser_hints(&windows.handles));
+
         let normalized_media_title = media_title.trim().to_lowercase();
-        let matching_titles = windows
-            .titles
+        let matching_contexts = contexts
             .iter()
-            .filter(|title| {
+            .filter(|context| {
                 !normalized_media_title.is_empty()
-                    && title.to_lowercase().contains(&normalized_media_title)
+                    && context.to_lowercase().contains(&normalized_media_title)
             })
             .cloned()
             .collect::<Vec<_>>();
 
-        let titles = if matching_titles.is_empty() {
-            windows.titles.join(" ")
+        if matching_contexts.is_empty() {
+            contexts.join(" ")
         } else {
-            matching_titles.join(" ")
-        };
-        let urls = browser_urls(&windows.handles).join(" ");
-
-        format!("{titles} {urls}")
+            matching_contexts.join(" ")
+        }
     }
 
     fn identify_windows_source(source_app_id: &str, metadata: &str, window_titles: &str) -> String {
         let searchable_source = format!("{source_app_id} {metadata}").to_lowercase();
+        let normalized_window_titles = window_titles.to_lowercase();
+        let asia_dream_channels = [
+            (
+                ["jkawaiiplayer", "j-pop powerplay kawaii"],
+                "Asia DREAM Radio — J-Pop Powerplay Kawaii",
+            ),
+            (
+                ["jpowerplayer", "j-pop powerplay"],
+                "Asia DREAM Radio — J-Pop Powerplay",
+            ),
+            (
+                ["jclubplayer", "j-club powerplay hiphop"],
+                "Asia DREAM Radio — J-Club Powerplay HipHop",
+            ),
+            (
+                ["jrockplayer", "j-rock powerplay"],
+                "Asia DREAM Radio — J-Rock Powerplay",
+            ),
+            (
+                ["jazzbandplayer", "jazz sakura"],
+                "Asia DREAM Radio — Jazz Sakura",
+            ),
+            (
+                ["natsukashiiplayer", "j-sakura"],
+                "Asia DREAM Radio — J-Sakura",
+            ),
+            (
+                ["japanhitsplayer", "japan hits"],
+                "Asia DREAM Radio — Japan Hits",
+            ),
+        ];
+
+        if let Some((_, label)) = asia_dream_channels.iter().find(|(identifiers, _)| {
+            identifiers
+                .iter()
+                .any(|identifier| normalized_window_titles.contains(identifier))
+        }) {
+            return (*label).to_owned();
+        }
+
         let streaming_services = [
             ("spotify", "Spotify"),
             ("music.amazon.", "Amazon Music"),
@@ -446,7 +494,6 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         // No Windows, navegadores podem publicar apenas um AUMID genérico ou
         // gerado, sem mencionar Chrome/Edge/Firefox. O título da janela ainda
         // contém normalmente o nome do serviço (por exemplo, "- YouTube").
-        let normalized_window_titles = window_titles.to_lowercase();
         if let Some((_, label)) = streaming_services
             .iter()
             .find(|(identifier, _)| normalized_window_titles.contains(identifier))
@@ -493,11 +540,10 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         }
 
         let properties = session.TryGetMediaPropertiesAsync()?.join()?;
-        let title = properties.Title()?.to_string();
-        if title.trim().is_empty() {
-            return Ok(None);
-        }
-
+        let mut title = properties
+            .Title()
+            .map(|value| value.to_string())
+            .unwrap_or_default();
         let artist = properties
             .Artist()
             .map(|value| value.to_string())
@@ -517,6 +563,17 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         let metadata = format!("{title} {artist} {subtitle} {album_title}");
         let source =
             identify_windows_source(&source_app_id, &metadata, &relevant_window_titles(&title));
+        if title.trim().is_empty() {
+            let normalized_source = source.to_lowercase();
+            let is_supported_radio = normalized_source.contains("kiss fm")
+                || normalized_source.contains("asia dream radio")
+                || normalized_source.contains("rádio j-hero")
+                || normalized_source.contains("89 a rádio rock");
+            if !is_supported_radio {
+                return Ok(None);
+            }
+            title = source.clone();
+        }
 
         Ok(Some(MediaInfo {
             title,
