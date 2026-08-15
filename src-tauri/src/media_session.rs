@@ -215,7 +215,37 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         GlobalSystemMediaTransportControlsSessionPlaybackStatus,
     };
 
-    fn identify_windows_source(source_app_id: &str, metadata: &str) -> Option<String> {
+    fn visible_window_titles() -> String {
+        use windows::{
+            core::BOOL,
+            Win32::{
+                Foundation::{HWND, LPARAM},
+                UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible},
+            },
+        };
+
+        unsafe extern "system" fn collect_title(hwnd: HWND, parameter: LPARAM) -> BOOL {
+            if !unsafe { IsWindowVisible(hwnd) }.as_bool() {
+                return BOOL::from(true);
+            }
+
+            let titles = unsafe { &mut *(parameter.0 as *mut Vec<String>) };
+            let mut buffer = [0_u16; 512];
+            let length = unsafe { GetWindowTextW(hwnd, &mut buffer) };
+            if length > 0 {
+                titles.push(String::from_utf16_lossy(&buffer[..length as usize]));
+            }
+
+            BOOL::from(true)
+        }
+
+        let mut titles = Vec::new();
+        let parameter = LPARAM((&mut titles as *mut Vec<String>) as isize);
+        let _ = unsafe { EnumWindows(Some(collect_title), parameter) };
+        titles.join(" ")
+    }
+
+    fn identify_windows_source(source_app_id: &str, metadata: &str, window_titles: &str) -> String {
         let searchable_source = format!("{source_app_id} {metadata}").to_lowercase();
         let streaming_services = [
             ("spotify", "Spotify"),
@@ -251,10 +281,60 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             ("asiadreamradio", "Asia DREAM Radio"),
         ];
 
-        streaming_services
+        if let Some((_, label)) = streaming_services
             .iter()
             .find(|(identifier, _)| searchable_source.contains(identifier))
-            .map(|(_, label)| (*label).to_owned())
+        {
+            return (*label).to_owned();
+        }
+
+        let normalized_app_id = source_app_id.to_lowercase();
+        let browser_identifiers = ["chrome", "msedge", "firefox", "brave", "vivaldi", "opera"];
+        if browser_identifiers
+            .iter()
+            .any(|browser| normalized_app_id.contains(browser))
+        {
+            let normalized_window_titles = window_titles.to_lowercase();
+            if let Some((_, label)) = streaming_services
+                .iter()
+                .find(|(identifier, _)| normalized_window_titles.contains(identifier))
+            {
+                return (*label).to_owned();
+            }
+        }
+
+        let known_players = [
+            ("vlc", "VLC"),
+            ("wmplayer", "Windows Media Player"),
+            ("zunemusic", "Media Player"),
+            ("media player", "Media Player"),
+            ("foobar2000", "foobar2000"),
+            ("musicbee", "MusicBee"),
+            ("aimp", "AIMP"),
+            ("winamp", "Winamp"),
+            ("mpv", "MPV"),
+            ("chrome", "Google Chrome"),
+            ("msedge", "Microsoft Edge"),
+            ("firefox", "Mozilla Firefox"),
+            ("brave", "Brave"),
+            ("vivaldi", "Vivaldi"),
+            ("opera", "Opera"),
+        ];
+
+        if let Some((_, label)) = known_players
+            .iter()
+            .find(|(identifier, _)| normalized_app_id.contains(identifier))
+        {
+            return (*label).to_owned();
+        }
+
+        source_app_id
+            .rsplit(['\\', '/', '!'])
+            .next()
+            .map(|name| name.trim_end_matches(".exe").trim())
+            .filter(|name| !name.is_empty())
+            .unwrap_or("Player de música")
+            .to_owned()
     }
 
     fn media_from_session(
@@ -271,14 +351,24 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             return Ok(None);
         }
 
-        let artist = properties.Artist()?.to_string();
-        let subtitle = properties.Subtitle()?.to_string();
-        let album_title = properties.AlbumTitle()?.to_string();
-        let source_app_id = session.SourceAppUserModelId()?.to_string();
+        let artist = properties
+            .Artist()
+            .map(|value| value.to_string())
+            .unwrap_or_default();
+        let subtitle = properties
+            .Subtitle()
+            .map(|value| value.to_string())
+            .unwrap_or_default();
+        let album_title = properties
+            .AlbumTitle()
+            .map(|value| value.to_string())
+            .unwrap_or_default();
+        let source_app_id = session
+            .SourceAppUserModelId()
+            .map(|value| value.to_string())
+            .unwrap_or_default();
         let metadata = format!("{title} {artist} {subtitle} {album_title}");
-        let Some(source) = identify_windows_source(&source_app_id, &metadata) else {
-            return Ok(None);
-        };
+        let source = identify_windows_source(&source_app_id, &metadata, &visible_window_titles());
 
         Ok(Some(MediaInfo {
             title,
