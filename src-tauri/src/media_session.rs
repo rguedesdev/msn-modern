@@ -220,31 +220,143 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             core::BOOL,
             Win32::{
                 Foundation::{HWND, LPARAM},
-                UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible},
+                System::Com::{
+                    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+                    COINIT_MULTITHREADED,
+                },
+                UI::{
+                    Accessibility::{
+                        CUIAutomation, IUIAutomation, IUIAutomationValuePattern,
+                        TreeScope_Descendants, UIA_EditControlTypeId, UIA_ValuePatternId,
+                    },
+                    WindowsAndMessaging::{
+                        EnumWindows, GetClassNameW, GetWindowTextW, IsWindowVisible,
+                    },
+                },
             },
         };
+
+        struct BrowserWindows {
+            titles: Vec<String>,
+            handles: Vec<HWND>,
+        }
 
         unsafe extern "system" fn collect_title(hwnd: HWND, parameter: LPARAM) -> BOOL {
             if !unsafe { IsWindowVisible(hwnd) }.as_bool() {
                 return BOOL::from(true);
             }
 
-            let titles = unsafe { &mut *(parameter.0 as *mut Vec<String>) };
+            let windows = unsafe { &mut *(parameter.0 as *mut BrowserWindows) };
             let mut buffer = [0_u16; 512];
             let length = unsafe { GetWindowTextW(hwnd, &mut buffer) };
             if length > 0 {
-                titles.push(String::from_utf16_lossy(&buffer[..length as usize]));
+                windows
+                    .titles
+                    .push(String::from_utf16_lossy(&buffer[..length as usize]));
+            }
+
+            let mut class_buffer = [0_u16; 128];
+            let class_length = unsafe { GetClassNameW(hwnd, &mut class_buffer) };
+            if class_length > 0 {
+                let class_name =
+                    String::from_utf16_lossy(&class_buffer[..class_length as usize]).to_lowercase();
+                if class_name.contains("chrome_widgetwin")
+                    || class_name.contains("mozillawindowclass")
+                {
+                    windows.handles.push(hwnd);
+                }
             }
 
             BOOL::from(true)
         }
 
-        let mut titles: Vec<String> = Vec::new();
-        let parameter = LPARAM((&mut titles as *mut Vec<String>) as isize);
+        fn browser_urls(handles: &[HWND]) -> Vec<String> {
+            let initialization = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+            let should_uninitialize = initialization.is_ok();
+
+            let result = (|| -> windows::core::Result<Vec<String>> {
+                let automation: IUIAutomation = unsafe {
+                    CoCreateInstance(
+                        &CUIAutomation,
+                        None::<&windows::core::IUnknown>,
+                        CLSCTX_INPROC_SERVER,
+                    )?
+                };
+                let condition = unsafe { automation.CreateTrueCondition()? };
+                let mut urls = Vec::new();
+
+                for &handle in handles {
+                    let Ok(window) = (unsafe { automation.ElementFromHandle(handle) }) else {
+                        continue;
+                    };
+                    let Ok(elements) =
+                        (unsafe { window.FindAll(TreeScope_Descendants, &condition) })
+                    else {
+                        continue;
+                    };
+                    let length = unsafe { elements.Length() }.unwrap_or(0).min(3_000);
+
+                    for index in 0..length {
+                        let Ok(element) = (unsafe { elements.GetElement(index) }) else {
+                            continue;
+                        };
+                        if unsafe { element.CurrentControlType() }.ok()
+                            != Some(UIA_EditControlTypeId)
+                        {
+                            continue;
+                        }
+
+                        let automation_id = unsafe { element.CurrentAutomationId() }
+                            .map(|value| value.to_string().to_lowercase())
+                            .unwrap_or_default();
+                        let name = unsafe { element.CurrentName() }
+                            .map(|value| value.to_string().to_lowercase())
+                            .unwrap_or_default();
+                        let is_address_bar = automation_id == "view_1001"
+                            || automation_id.contains("urlbar")
+                            || name.contains("address")
+                            || name.contains("endereço")
+                            || name.contains("endereco");
+                        if !is_address_bar {
+                            continue;
+                        }
+
+                        let Ok(pattern) = (unsafe {
+                            element.GetCurrentPatternAs::<IUIAutomationValuePattern>(
+                                UIA_ValuePatternId,
+                            )
+                        }) else {
+                            continue;
+                        };
+                        let value = unsafe { pattern.CurrentValue() }
+                            .map(|value| value.to_string())
+                            .unwrap_or_default();
+                        if !value.trim().is_empty() {
+                            urls.push(value);
+                        }
+                    }
+                }
+
+                Ok(urls)
+            })();
+
+            if should_uninitialize {
+                unsafe { CoUninitialize() };
+            }
+
+            result.unwrap_or_default()
+        }
+
+        let mut windows = BrowserWindows {
+            titles: Vec::new(),
+            handles: Vec::new(),
+        };
+        let parameter = LPARAM((&mut windows as *mut BrowserWindows) as isize);
         let _ = unsafe { EnumWindows(Some(collect_title), parameter) };
 
         let normalized_media_title = media_title.trim().to_lowercase();
-        let matching_titles = titles
+        let matching_titles = windows
+            .titles
             .iter()
             .filter(|title| {
                 !normalized_media_title.is_empty()
@@ -253,17 +365,21 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             .cloned()
             .collect::<Vec<_>>();
 
-        if matching_titles.is_empty() {
-            titles.join(" ")
+        let titles = if matching_titles.is_empty() {
+            windows.titles.join(" ")
         } else {
             matching_titles.join(" ")
-        }
+        };
+        let urls = browser_urls(&windows.handles).join(" ");
+
+        format!("{titles} {urls}")
     }
 
     fn identify_windows_source(source_app_id: &str, metadata: &str, window_titles: &str) -> String {
         let searchable_source = format!("{source_app_id} {metadata}").to_lowercase();
         let streaming_services = [
             ("spotify", "Spotify"),
+            ("music.amazon.", "Amazon Music"),
             ("amazonmusic", "Amazon Music"),
             ("amazon music", "Amazon Music"),
             ("deezer", "Deezer"),
@@ -273,6 +389,7 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             ("radio j-hero", "Rádio J-Hero"),
             ("radiojhero", "Rádio J-Hero"),
             ("89fm", "89 A Rádio Rock"),
+            ("radiorock.com.br", "89 A Rádio Rock"),
             ("a rádio rock", "89 A Rádio Rock"),
             ("a radio rock", "89 A Rádio Rock"),
             ("tidal", "TIDAL"),
@@ -281,10 +398,12 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             ("youtube", "YouTube"),
             ("applemusic", "Apple Music"),
             ("apple music", "Apple Music"),
+            ("music.apple.com", "Apple Music"),
             ("itunes", "Apple Music"),
             ("napster", "Napster"),
             ("line music", "LINE MUSIC"),
             ("linemusic", "LINE MUSIC"),
+            ("music.line.me", "LINE MUSIC"),
             ("soundcloud", "SoundCloud"),
             ("qobuz", "Qobuz"),
             ("pandora", "Pandora"),
