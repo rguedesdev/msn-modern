@@ -10,12 +10,23 @@ import { useParams } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
 
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { emit, listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { Socket } from "socket.io-client";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { UserAttentionType } from "@tauri-apps/api/window";
 
 // Componentes
 import { PictureFrame } from "../../shared/constants/PictureFrame/page";
+import { MediaSourceIcon } from "../../shared/components/MediaSourceIcon";
+import {
+  CONTACT_STATUS_FRAMES,
+  toContactStatus,
+} from "../../shared/constants/ContactStatusFrame/page";
+import { getTextEffectStyle } from "../../shared/constants/TextEffects/page";
+import {
+  isNameEffect,
+  isProfileFrame,
+} from "../../shared/constants/ProfileStyle/page";
 import {
   appendChatMessage,
   getChatMessages,
@@ -23,9 +34,11 @@ import {
   type ChatMessage,
 } from "../../shared/utils/chatStorage";
 import { useAuth } from "../../shared/auth/AuthContext";
+import { resolveApiAssetUrl } from "../../shared/api/client";
 import { decryptEnvelope, encryptForDevice, listPublicKeys, registerCurrentDevice } from "../../shared/api/e2ee";
 import { listEncryptedMessages, sendEncryptedMessage, type ApiEncryptedMessage } from "../../shared/api/messages";
 import { connectRealtime } from "../../shared/api/realtime";
+import { chatMessageSchema } from "../../shared/validation/forms";
 
 // Icons
 import {
@@ -241,6 +254,8 @@ type EmoticonCode = (typeof EMOTICONS)[number]["code"];
 type EmoticonPickerTab = "standard" | "exclusive";
 
 const EDITOR_CARET_ANCHOR = "\u200B";
+const TASKBAR_BLINK_INTERVAL_MS = 600;
+const TASKBAR_BLINK_DURATION_MS = TASKBAR_BLINK_INTERVAL_MS * 7;
 
 const EMOTICON_PATTERN = new RegExp(
   `(${EMOTICONS.map((emoticon) =>
@@ -411,7 +426,13 @@ function ChatWindow() {
   const messageComposerRef = useRef<HTMLDivElement>(null);
   const hasPositionedInitialMessagesRef = useRef(false);
   const nudgeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const appWindow = useMemo(() => getCurrentWebviewWindow(), []);
+  const isTaskbarHighlightedRef = useRef(false);
+  const taskbarBlinkIntervalRef = useRef<number | undefined>(undefined);
+  const taskbarBlinkEndTimerRef = useRef<number | undefined>(undefined);
+  const realtimeSocketRef = useRef<Socket | null>(null);
+  const triggerNudgeEffectRef = useRef<() => Promise<void>>(async () => {});
+  const initialNudgeHandledRef = useRef(false);
+  const appWindow = useMemo(() => (isTauri() ? getCurrentWebviewWindow() : null), []);
   const activeExclusivePack =
     EXCLUSIVE_EMOTICON_PACKS.find(
       (pack) => pack.id === activeExclusivePackId,
@@ -438,6 +459,7 @@ function ChatWindow() {
   }, [isEmoticonPickerOpen]);
 
   useEffect(() => {
+    if (!appWindow) return;
     const previousHtmlBackground = document.documentElement.style.background;
     const previousBodyBackground = document.body.style.background;
     let revealTimer: number | undefined;
@@ -467,26 +489,44 @@ function ChatWindow() {
 
   const [searchParams] = useSearchParams();
   const contactUserId = searchParams.get("userId") || "";
-  const contactStatus = searchParams.get("status");
-  const contactName = searchParams.get("name") || `Contato ${id}`;
-  const contactMessage = searchParams.get("message") || "";
+  const [contactStatus, setContactStatus] = useState(
+    searchParams.get("status") || "offline",
+  );
+  const [contactName, setContactName] = useState(
+    searchParams.get("name") || `Contato ${id}`,
+  );
+  const [contactAvatarUrl, setContactAvatarUrl] = useState(
+    searchParams.get("avatarUrl") || "",
+  );
+  const contactProfileFrameParam = searchParams.get("profileFrame");
+  const [contactProfileFrame, setContactProfileFrame] = useState(
+    isProfileFrame(contactProfileFrameParam) ? contactProfileFrameParam : "status",
+  );
+  const contactNameEffectParam = searchParams.get("nameEffect");
+  const [contactNameEffect, setContactNameEffect] = useState(
+    isNameEffect(contactNameEffectParam) ? contactNameEffectParam : "default",
+  );
+  const ownStatus = toContactStatus(searchParams.get("ownStatus") || "online");
+  const ownProfileFrameParam = searchParams.get("ownProfileFrame");
+  const ownProfileFrame = isProfileFrame(ownProfileFrameParam)
+    ? ownProfileFrameParam
+    : (user?.profileFrame ?? "status");
+  const ownNameEffectParam = searchParams.get("ownNameEffect");
+  const ownNameEffect = isNameEffect(ownNameEffectParam)
+    ? ownNameEffectParam
+    : (user?.nameEffect ?? "default");
+  const initialContactActivity = searchParams.get("message") || "";
+  const [contactActivity, setContactActivity] = useState(
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(initialContactActivity)
+      ? ""
+      : initialContactActivity,
+  );
+  const [contactMusicSource, setContactMusicSource] = useState(
+    searchParams.get("musicSource") || "",
+  );
 
-  const contactStatusLabel =
-    {
-      online: "Online",
-      ocupado: "Ocupado",
-      ausente: "Ausente",
-      invisivel: "Invisível",
-      offline: "Offline",
-    }[contactStatus || "offline"] ?? "Offline";
-
-  const contactStatusColor = {
-    online: "bg-green-500",
-    ocupado: "bg-red-500",
-    ausente: "bg-yellow-400",
-    invisivel: "bg-zinc-200",
-    offline: "bg-zinc-300",
-  }[contactStatus || "offline"];
+  const contactStatusFrame = CONTACT_STATUS_FRAMES[toContactStatus(contactStatus)];
+  const contactStatusLabel = contactStatusFrame.label;
 
   const lastReceivedAt = useMemo(() => {
     const lastReceivedMessage = messages.findLast(
@@ -590,9 +630,13 @@ function ChatWindow() {
   };
 
   const handleSendMessage = async () => {
-    const trimmedMessage = message.trim();
-
-    if (!trimmedMessage || !id || !user || !contactUserId || isSending) return;
+    const validation = chatMessageSchema.safeParse(message);
+    if (!validation.success) {
+      setSendError(validation.error.issues[0]?.message ?? "Mensagem inválida");
+      return;
+    }
+    if (!id || !user || !contactUserId || isSending) return;
+    const validatedMessage = validation.data;
     setIsSending(true);
     setSendError("");
     try {
@@ -610,11 +654,11 @@ function ChatWindow() {
       ];
       const envelopes = await Promise.all(
         targets.map(({ userId: recipientUserId, key }) =>
-          encryptForDevice(trimmedMessage, id, recipientUserId, key),
+          encryptForDevice(validatedMessage, id, recipientUserId, key),
         ),
       );
       const sent = await sendEncryptedMessage(id, identity.deviceId, envelopes);
-      const chatMessage: ChatMessage = { id: sent._id, author: "me", text: trimmedMessage };
+      const chatMessage: ChatMessage = { id: sent._id, author: "me", text: validatedMessage };
       setMessages((current) => {
         const updated = [...current, chatMessage];
         saveChatMessages(id, updated);
@@ -646,37 +690,10 @@ function ChatWindow() {
     }
   }, [id, user]);
 
-  useEffect(() => {
-    if (!id || !user) return;
-    let cancelled = false;
-    void registerCurrentDevice(user.id)
-      .then(() => listEncryptedMessages(id))
-      .then((history) => Promise.all(history.map(decryptApiMessage)))
-      .then((decrypted) => {
-        if (cancelled) return;
-        const available = decrypted.filter((item): item is ChatMessage => item !== null);
-        setMessages(available);
-        saveChatMessages(id, available);
-      })
-      .catch((error) => {
-        if (!cancelled) setSendError(error instanceof Error ? error.message : "Erro ao carregar mensagens");
-      });
-
-    const socket = connectRealtime((incoming) => {
-      if (incoming.conversationId !== id) return;
-      void decryptApiMessage(incoming as ApiEncryptedMessage).then((decrypted) => {
-        if (!decrypted || cancelled) return;
-        setMessages(appendChatMessage(id, decrypted));
-      });
-    });
-    return () => {
-      cancelled = true;
-      socket?.disconnect();
-    };
-  }, [decryptApiMessage, id, user]);
-
   const applyTaskbarHighlight = useCallback(
     (highlighted: boolean) => {
+      if (!appWindow) return;
+      isTaskbarHighlightedRef.current = highlighted;
       const attentionType = highlighted
         ? UserAttentionType.Informational
         : null;
@@ -694,15 +711,46 @@ function ChatWindow() {
     [appWindow, contactName],
   );
 
+  const stopTaskbarBlinkTimers = useCallback(() => {
+    if (taskbarBlinkIntervalRef.current !== undefined) {
+      window.clearInterval(taskbarBlinkIntervalRef.current);
+      taskbarBlinkIntervalRef.current = undefined;
+    }
+    if (taskbarBlinkEndTimerRef.current !== undefined) {
+      window.clearTimeout(taskbarBlinkEndTimerRef.current);
+      taskbarBlinkEndTimerRef.current = undefined;
+    }
+  }, []);
+
   const clearTaskbarHighlight = useCallback(() => {
+    stopTaskbarBlinkTimers();
     applyTaskbarHighlight(false);
-  }, [applyTaskbarHighlight]);
+  }, [applyTaskbarHighlight, stopTaskbarBlinkTimers]);
+
+  const fixTaskbarHighlight = useCallback(() => {
+    stopTaskbarBlinkTimers();
+    applyTaskbarHighlight(true);
+  }, [applyTaskbarHighlight, stopTaskbarBlinkTimers]);
+
+  const blinkTaskbarInAmber = useCallback(() => {
+    if (!appWindow) return;
+    stopTaskbarBlinkTimers();
+    applyTaskbarHighlight(true);
+    taskbarBlinkIntervalRef.current = window.setInterval(() => {
+      applyTaskbarHighlight(!isTaskbarHighlightedRef.current);
+    }, TASKBAR_BLINK_INTERVAL_MS);
+    taskbarBlinkEndTimerRef.current = window.setTimeout(
+      fixTaskbarHighlight,
+      TASKBAR_BLINK_DURATION_MS,
+    );
+  }, [appWindow, applyTaskbarHighlight, fixTaskbarHighlight, stopTaskbarBlinkTimers]);
 
   const handleMinimizeConversation = () => {
-    void appWindow.minimize();
+    if (appWindow) void appWindow.minimize();
   };
 
   useEffect(() => {
+    if (!appWindow) return;
     let unlistenFocusChanged: (() => void) | undefined;
 
     void appWindow
@@ -718,6 +766,86 @@ function ChatWindow() {
       clearTaskbarHighlight();
     };
   }, [appWindow, clearTaskbarHighlight]);
+
+  useEffect(() => {
+    if (!id || !user) return;
+    let cancelled = false;
+    void registerCurrentDevice(user.id)
+      .then(() => listEncryptedMessages(id))
+      .then((history) => Promise.all(history.map(decryptApiMessage)))
+      .then((decrypted) => {
+        if (cancelled) return;
+        const available = decrypted.filter((item): item is ChatMessage => item !== null);
+        setMessages(available);
+        saveChatMessages(id, available);
+      })
+      .catch((error) => {
+        if (!cancelled) setSendError(error instanceof Error ? error.message : "Erro ao carregar mensagens");
+      });
+
+    const socket = connectRealtime(
+      (incoming) => {
+        if (incoming.conversationId !== id || incoming.senderUserId === user.id) return;
+        void decryptApiMessage(incoming as ApiEncryptedMessage).then((decrypted) => {
+          if (!decrypted || cancelled) return;
+          setMessages(appendChatMessage(id, decrypted));
+          if (appWindow) {
+            void Promise.all([appWindow.isFocused(), appWindow.isMinimized()])
+              .then(([isFocused, isMinimized]) => {
+                if (!cancelled && (isMinimized || !isFocused)) blinkTaskbarInAmber();
+              })
+              .catch((error) => {
+                console.error("Erro ao verificar o estado da janela de conversa:", error);
+              });
+          }
+        });
+      },
+      undefined,
+      undefined,
+      (nudge) => {
+        if (nudge.conversationId === id && nudge.senderUserId !== user.id) {
+          void triggerNudgeEffectRef.current();
+        }
+      },
+      (profiles) => {
+        const contactProfile = profiles.find((profile) => profile.userId === contactUserId);
+        if (!contactProfile) return;
+        setContactActivity(
+          contactProfile.music || contactProfile.personalMessage || "",
+        );
+        setContactMusicSource(
+          contactProfile.music ? contactProfile.musicSource : "",
+        );
+      },
+      (profile) => {
+        if (profile.userId === contactUserId) {
+          setContactActivity(profile.music || profile.personalMessage || "");
+          setContactMusicSource(profile.music ? profile.musicSource : "");
+        }
+      },
+      (statuses) => {
+        const status = statuses.find((item) => item.userId === contactUserId)?.status;
+        setContactStatus(status ?? "offline");
+      },
+      (status) => {
+        if (status.userId === contactUserId) setContactStatus(status.status);
+      },
+      undefined,
+      (account) => {
+        if (account.userId !== contactUserId) return;
+        setContactName(account.displayName);
+        setContactAvatarUrl(account.avatarUrl);
+        setContactProfileFrame(account.profileFrame);
+        setContactNameEffect(account.nameEffect);
+      },
+    );
+    realtimeSocketRef.current = socket;
+    return () => {
+      cancelled = true;
+      realtimeSocketRef.current = null;
+      socket?.disconnect();
+    };
+  }, [appWindow, blinkTaskbarInAmber, contactUserId, decryptApiMessage, id, user]);
 
   const saveEditorSelection = () => {
     const editor = messageInputRef.current;
@@ -821,10 +949,11 @@ function ChatWindow() {
     setIsNudging(true);
 
     try {
-      // Primeiro acorda a WebView para que o áudio volte a ser processado.
-      await appWindow.unminimize();
-      await appWindow.show();
-      await appWindow.setFocus();
+      if (appWindow) {
+        await appWindow.unminimize();
+        await appWindow.show();
+        await appWindow.setFocus();
+      }
     } catch (error) {
       console.error("Erro ao focar janela nativa:", error);
     }
@@ -849,6 +978,16 @@ function ChatWindow() {
     }, 500);
   }, [appWindow]);
 
+  useEffect(() => {
+    triggerNudgeEffectRef.current = triggerNudgeEffect;
+  }, [triggerNudgeEffect]);
+
+  useEffect(() => {
+    if (!searchParams.has("nudge") || initialNudgeHandledRef.current) return;
+    initialNudgeHandledRef.current = true;
+    void triggerNudgeEffect();
+  }, [searchParams, triggerNudgeEffect]);
+
   // AÇÃO DO REMETENTE
   // const handleSendNudge = async () => {
   //   // Treme a sua própria tela (feedback local)
@@ -861,60 +1000,21 @@ function ChatWindow() {
   //   });
   // };
   const handleSendNudge = async () => {
-    // Status permitidos no MSN clássico
-    const allowedNudgeStatus = ["online", "ocupado", "ausente"];
-
-    // bloqueia invisível/offline
-    if (!contactStatus || !allowedNudgeStatus.includes(contactStatus)) {
-      console.log("Nudge bloqueado.");
-      return;
+    const socket = realtimeSocketRef.current;
+    if (!socket || !id) return;
+    try {
+      const result = await socket.timeout(5_000).emitWithAck(
+        "nudge:send",
+        { conversationId: id },
+      ) as { delivered: boolean };
+      if (result.delivered) await triggerNudgeEffect();
+    } catch (error) {
+      console.error("Não foi possível chamar a atenção:", error);
     }
-
-    // efeito local
-    await triggerNudgeEffect();
-
-    // envia para outra janela
-    await emit("msn-nudge-received", {
-      chatId: id,
-      senderLabel: appWindow.label,
-    });
   };
 
-  // OUVINTE DO DESTINATÁRIO
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-
-    async function setupListener() {
-      unlisten = await listen("msn-nudge-received", (event) => {
-        const payload = event.payload as {
-          chatId: string;
-          senderLabel: string;
-        };
-
-        // ignora evento vindo da própria janela
-        if (payload && payload.senderLabel === appWindow.label) {
-          return;
-        }
-
-        // ignora chats diferentes
-        if (payload.chatId !== id) {
-          return;
-        }
-
-        console.log("Nudge interceptado da outra janela!");
-
-        triggerNudgeEffect();
-      });
-    }
-
-    setupListener();
-
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, [appWindow.label, id, triggerNudgeEffect]);
-
-  useEffect(() => {
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
 
     async function setupMessageListener() {
@@ -968,25 +1068,25 @@ function ChatWindow() {
         type="button"
         aria-label="Redimensionar pela borda superior"
         className="absolute inset-x-3 top-0 z-50 h-1 cursor-n-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("North")}
+        onMouseDown={() => appWindow && void appWindow.startResizeDragging("North")}
       />
       <button
         type="button"
         aria-label="Redimensionar pela borda inferior"
         className="absolute inset-x-3 bottom-0 z-50 h-1 cursor-s-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("South")}
+        onMouseDown={() => appWindow && void appWindow.startResizeDragging("South")}
       />
       <button
         type="button"
         aria-label="Redimensionar pela borda esquerda"
         className="absolute inset-y-3 left-0 z-50 w-1 cursor-w-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("West")}
+        onMouseDown={() => appWindow && void appWindow.startResizeDragging("West")}
       />
       <button
         type="button"
         aria-label="Redimensionar pela borda direita"
         className="absolute inset-y-3 right-0 z-50 w-1 cursor-e-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("East")}
+        onMouseDown={() => appWindow && void appWindow.startResizeDragging("East")}
       />
 
       <div
@@ -1087,7 +1187,7 @@ function ChatWindow() {
               type="button"
               aria-label="Maximizar ou restaurar conversa"
               title="Maximizar ou restaurar"
-              onClick={() => void appWindow.toggleMaximize()}
+              onClick={() => appWindow && void appWindow.toggleMaximize()}
               className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
             >
               <MdCropSquare size={13} />
@@ -1096,7 +1196,7 @@ function ChatWindow() {
               type="button"
               aria-label="Fechar conversa"
               title="Fechar"
-              onClick={() => void appWindow.close()}
+              onClick={() => appWindow ? void appWindow.close() : window.history.back()}
               className="grid w-10 place-items-center rounded-tr-[11px] text-[#426b81] transition-colors hover:bg-[#d86161] hover:text-white"
             >
               <MdClose size={18} />
@@ -1107,40 +1207,47 @@ function ChatWindow() {
         {/* Avatar do contato + histórico da conversa */}
         <section className="flex min-h-0 flex-1 gap-2.5 px-3 pt-3">
           <aside
-            className={`flex shrink-0 items-start justify-center pt-3 transition-[width] duration-200 ${
+            className={`flex shrink-0 items-start justify-center transition-[width] duration-200 ${
               isVideoCallOpen
                 ? `invisible ${isVideoCallExpanded ? "w-[300px]" : "w-28"}`
                 : "w-28"
             }`}
           >
-            <div className="relative">
-              <div className="rounded-[13px] border-[6px] border-[#8adbbd] bg-white shadow-[0_3px_10px_rgba(38,94,78,0.24)] ring-1 ring-[#559a82]">
-                <div className="flex h-24 w-24 items-center justify-center rounded-[6px] bg-gradient-to-br from-[#eefaf6] via-[#d3eee8] to-[#afd6e7] text-4xl font-bold text-[#438d73] shadow-inner">
-                  {contactName.charAt(0).toUpperCase()}
-                </div>
-              </div>
-              <span
-                className={`absolute bottom-0 right-0 z-30 h-4 w-4 rounded-full border-2 border-white shadow-sm ${contactStatusColor}`}
-              />
-            </div>
+            <PictureFrame
+              frame={contactProfileFrame}
+              status={toContactStatus(contactStatus)}
+              imageSrc={resolveApiAssetUrl(contactAvatarUrl) || undefined}
+              imageAlt={`Foto de perfil de ${contactName}`}
+              displayName={contactName}
+              imageSize={96}
+            />
           </aside>
 
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <header className="flex items-start justify-between border-b border-[#b9d3df] px-1 pb-2.5">
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-semibold text-[#284f65]">
-                  {contactName}{" "}
+                  <span style={contactNameEffect !== "default"
+                    ? getTextEffectStyle(contactNameEffect)
+                    : undefined}
+                  >
+                    {contactName}
+                  </span>{" "}
                   <span className="text-sm font-normal italic text-[#67899a]">
                     ({contactStatusLabel})
                   </span>
                 </h1>
-                {contactMessage && (
-                  <p className="truncate text-xs italic text-[#527589]">
-                    {contactMessage}
-                  </p>
+                {contactActivity && (
+                  <div className="flex min-w-0 items-center gap-1.5 text-xs italic text-[#527589]">
+                    {contactMusicSource && (
+                      <span className="shrink-0 text-[16px] not-italic">
+                        <MediaSourceIcon source={contactMusicSource} />
+                      </span>
+                    )}
+                    <p className="truncate">{contactActivity}</p>
+                  </div>
                 )}
               </div>
-              <span className="text-[10px] text-[#91aeba]">ID: {id}</span>
             </header>
 
             <div
@@ -1165,8 +1272,15 @@ function ChatWindow() {
                           : "items-start"
                       }`}
                     >
-                      <span className="mb-1 px-1 text-xs font-medium text-[#5f7f90]">
-                        {chatMessage.author === "me" ? "Você" : contactName}
+                      <span
+                        className="mb-1 px-1 text-xs font-medium text-[#5f7f90]"
+                        style={chatMessage.author === "me"
+                          ? (ownNameEffect !== "default" ? getTextEffectStyle(ownNameEffect) : undefined)
+                          : (contactNameEffect !== "default" ? getTextEffectStyle(contactNameEffect) : undefined)}
+                      >
+                        {chatMessage.author === "me"
+                          ? `${user?.displayName ?? "Você"} diz:`
+                          : `${contactName} diz:`}
                       </span>
                       <p className="max-w-[78%] whitespace-pre-wrap break-words rounded-[9px] border border-[#c4dbe5] bg-white px-3 py-2 text-[#375567] shadow-[0_1px_3px_rgba(42,83,104,0.1)]">
                         <MessageContent text={chatMessage.text} />
@@ -1188,7 +1302,13 @@ function ChatWindow() {
                 : "w-28"
             }`}
           >
-            <PictureFrame frame="frias" imageAlt="Minha foto de perfil" />
+            <PictureFrame
+              frame={ownProfileFrame}
+              status={ownStatus}
+              imageSrc={resolveApiAssetUrl(user?.avatarUrl) || undefined}
+              imageAlt="Minha foto de perfil"
+              displayName={user?.displayName}
+            />
           </aside>
 
           <div

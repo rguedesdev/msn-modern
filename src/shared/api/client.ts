@@ -1,7 +1,19 @@
+import type {
+  NameEffect,
+  ProfileFrame,
+  ProfileStyleKey,
+} from "../constants/ProfileStyle/page";
+
 export interface ApiUser {
   id: string;
   email: string;
   displayName: string;
+  personalMessage: string;
+  avatarUrl: string;
+  profileFrame: ProfileFrame;
+  nameEffect: NameEffect;
+  ownedProfileFrames: ProfileStyleKey[];
+  ownedNameEffects: ProfileStyleKey[];
 }
 
 export interface AuthSession {
@@ -81,7 +93,11 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const session = getSession();
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) {
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
   if (session) headers.set("Authorization", `Bearer ${session.accessToken}`);
@@ -100,6 +116,12 @@ export async function apiRequest<T>(
   if (!response.ok) throw new ApiError(response.status, await readError(response));
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export function resolveApiAssetUrl(path: string | undefined): string {
+  if (!path) return "";
+  if (/^(?:data:|https?:)/.test(path)) return path;
+  return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export { API_URL };

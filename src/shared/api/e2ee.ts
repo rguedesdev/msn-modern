@@ -3,6 +3,7 @@ import { apiRequest } from "./client";
 const ALGORITHM = "ECDH-P256-HKDF-SHA256-AES256GCM" as const;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const deviceRegistrationPromises = new Map<string, Promise<StoredDeviceIdentity>>();
 
 export interface StoredDeviceIdentity {
   deviceId: string;
@@ -65,13 +66,24 @@ async function getOrCreateIdentity(userId: string): Promise<StoredDeviceIdentity
   return identity;
 }
 
-export async function registerCurrentDevice(userId: string): Promise<StoredDeviceIdentity> {
-  const identity = await getOrCreateIdentity(userId);
-  await apiRequest(`/e2ee/devices/${identity.deviceId}`, {
-    method: "PUT",
-    body: JSON.stringify({ algorithm: ALGORITHM, publicKey: identity.publicKey }),
-  });
-  return identity;
+export function registerCurrentDevice(userId: string): Promise<StoredDeviceIdentity> {
+  const currentRegistration = deviceRegistrationPromises.get(userId);
+  if (currentRegistration) return currentRegistration;
+
+  const registration = getOrCreateIdentity(userId)
+    .then(async (identity) => {
+      await apiRequest(`/e2ee/devices/${identity.deviceId}`, {
+        method: "PUT",
+        body: JSON.stringify({ algorithm: ALGORITHM, publicKey: identity.publicKey }),
+      });
+      return identity;
+    })
+    .catch((error) => {
+      deviceRegistrationPromises.delete(userId);
+      throw error;
+    });
+  deviceRegistrationPromises.set(userId, registration);
+  return registration;
 }
 
 export async function listPublicKeys(userId: string): Promise<PublicDeviceKey[]> {

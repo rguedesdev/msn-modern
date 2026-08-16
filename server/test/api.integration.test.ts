@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { connectDatabase, disconnectDatabase } from "../src/db.js";
+import { UserModel } from "../src/models/user.js";
 
 const mongodbUri = process.env.MONGODB_URI;
 
@@ -59,6 +60,170 @@ describe("API com MongoDB", () => {
     const bob = registerBob.json();
     const aliceAuth = { authorization: `Bearer ${alice.accessToken}` };
     const bobAuth = { authorization: `Bearer ${bob.accessToken}` };
+
+    expect(alice.user).toMatchObject({
+      ownedProfileFrames: ["aurora"],
+      ownedNameEffects: ["aurora"],
+    });
+    const testUnlockedAppearance = await app.inject({
+      method: "PATCH",
+      url: "/me/profile",
+      headers: aliceAuth,
+      payload: { profileFrame: "aurora", nameEffect: "aurora" },
+    });
+    expect(testUnlockedAppearance.statusCode).toBe(200);
+
+    const lockedAppearance = await app.inject({
+      method: "PATCH",
+      url: "/me/profile",
+      headers: aliceAuth,
+      payload: { profileFrame: "matrix", nameEffect: "gold" },
+    });
+    expect(lockedAppearance.statusCode).toBe(403);
+
+    await UserModel.findByIdAndUpdate(alice.user.id, {
+      $set: {
+        ownedProfileFrames: ["matrix"],
+        ownedNameEffects: ["gold"],
+      },
+    });
+    const updatedAppearance = await app.inject({
+      method: "PATCH",
+      url: "/me/profile",
+      headers: aliceAuth,
+      payload: { profileFrame: "matrix", nameEffect: "gold" },
+    });
+    expect(updatedAppearance.statusCode).toBe(200);
+    expect(updatedAppearance.json().user).toMatchObject({
+      profileFrame: "matrix",
+      nameEffect: "gold",
+      ownedProfileFrames: ["matrix", "aurora"],
+      ownedNameEffects: ["gold", "aurora"],
+    });
+
+    const updatedProfile = await app.inject({
+      method: "PATCH",
+      url: "/me/profile",
+      headers: aliceAuth,
+      payload: { personalMessage: "Disponível para conversar" },
+    });
+    expect(updatedProfile.statusCode).toBe(200);
+    expect(updatedProfile.json().user.personalMessage).toBe("Disponível para conversar");
+
+    const updatedAccount = await app.inject({
+      method: "PATCH",
+      url: "/me/profile",
+      headers: aliceAuth,
+      payload: { displayName: "Alice Silva" },
+    });
+    expect(updatedAccount.statusCode).toBe(200);
+    expect(updatedAccount.json().user).toMatchObject({
+      displayName: "Alice Silva",
+    });
+
+    const avatarBoundary = "----msn-avatar-integration";
+    const invalidAvatarPayload = Buffer.from([
+      `--${avatarBoundary}\r\n`,
+      'Content-Disposition: form-data; name="avatar"; filename="avatar.png"\r\n',
+      "Content-Type: image/png\r\n\r\n",
+      "isto nao e uma imagem",
+      `\r\n--${avatarBoundary}--\r\n`,
+    ].join(""));
+    const invalidAvatar = await app.inject({
+      method: "POST",
+      url: "/me/avatar",
+      headers: {
+        ...aliceAuth,
+        "content-type": `multipart/form-data; boundary=${avatarBoundary}`,
+      },
+      payload: invalidAvatarPayload,
+    });
+    expect(invalidAvatar.statusCode).toBe(400);
+
+    const avatarBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const avatarPayload = Buffer.concat([
+      Buffer.from(`--${avatarBoundary}\r\n`),
+      Buffer.from('Content-Disposition: form-data; name="avatar"; filename="avatar.png"\r\n'),
+      Buffer.from("Content-Type: image/png\r\n\r\n"),
+      avatarBytes,
+      Buffer.from(`\r\n--${avatarBoundary}--\r\n`),
+    ]);
+    const uploadedAvatar = await app.inject({
+      method: "POST",
+      url: "/me/avatar",
+      headers: {
+        ...aliceAuth,
+        "content-type": `multipart/form-data; boundary=${avatarBoundary}`,
+      },
+      payload: avatarPayload,
+    });
+    expect(uploadedAvatar.statusCode).toBe(201);
+    const avatarUrl = uploadedAvatar.json().avatarUrl as string;
+    expect(avatarUrl).toMatch(
+      new RegExp(`^/users/${alice.user.id}/avatar\\?v=[a-f\\d]{24}&policy=2$`),
+    );
+
+    const downloadedAvatar = await app.inject({ method: "GET", url: avatarUrl });
+    expect(downloadedAvatar.statusCode).toBe(200);
+    expect(downloadedAvatar.headers["content-type"]).toBe("image/jpeg");
+    expect(downloadedAvatar.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+    expect(downloadedAvatar.rawPayload.subarray(0, 3)).toEqual(
+      Buffer.from([0xff, 0xd8, 0xff]),
+    );
+    expect(await mongoose.connection.db?.collection("avatars.files").countDocuments({
+      "metadata.ownerUserId": alice.user.id,
+    })).toBe(1);
+
+    const wrongPassword = await app.inject({
+      method: "PATCH",
+      url: "/me/password",
+      headers: aliceAuth,
+      payload: { currentPassword: "senha-incorreta", newPassword: "nova-senha-alice" },
+    });
+    expect(wrongPassword.statusCode).toBe(400);
+
+    const changedPassword = await app.inject({
+      method: "PATCH",
+      url: "/me/password",
+      headers: aliceAuth,
+      payload: { currentPassword: "password-alice", newPassword: "nova-senha-alice" },
+    });
+    expect(changedPassword.statusCode).toBe(204);
+
+    const loginWithNewPassword = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      payload: { email: "alice@example.test", password: "nova-senha-alice" },
+    });
+    expect(loginWithNewPassword.statusCode).toBe(200);
+
+    const persistedProfile = await app.inject({
+      method: "GET",
+      url: "/me",
+      headers: aliceAuth,
+    });
+    expect(persistedProfile.json().user.personalMessage).toBe("Disponível para conversar");
+    expect(persistedProfile.json().user).toMatchObject({
+      displayName: "Alice Silva",
+      avatarUrl,
+      profileFrame: "matrix",
+      nameEffect: "gold",
+    });
+
+    const removedAvatar = await app.inject({
+      method: "DELETE",
+      url: "/me/avatar",
+      headers: aliceAuth,
+    });
+    expect(removedAvatar.statusCode).toBe(204);
+    expect((await app.inject({ method: "GET", url: avatarUrl })).statusCode).toBe(404);
+    expect(await mongoose.connection.db?.collection("avatars.files").countDocuments({
+      "metadata.ownerUserId": alice.user.id,
+    })).toBe(0);
+
     const aliceDeviceId = "11111111-1111-4111-8111-111111111111";
     const bobDeviceId = "22222222-2222-4222-8222-222222222222";
     const publicBundle = (name: string) => ({

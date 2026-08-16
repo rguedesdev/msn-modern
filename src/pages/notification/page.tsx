@@ -5,14 +5,25 @@ import {
   MessengerNotification,
   type MessengerNotificationData,
 } from "../../shared/components/MessengerNotification";
+import { toContactStatus } from "../../shared/constants/ContactStatusFrame/page";
+import {
+  isNameEffect,
+  isProfileFrame,
+} from "../../shared/constants/ProfileStyle/page";
 
 function NotificationWindow() {
   const [searchParams] = useSearchParams();
   const appWindow = useMemo(() => getCurrentWindow(), []);
+  const profileFrameParam = searchParams.get("profileFrame");
+  const nameEffectParam = searchParams.get("nameEffect");
   const notification: MessengerNotificationData = {
     id: Number(searchParams.get("id")) || 0,
     contactId: searchParams.get("contactId") || "",
     contactName: searchParams.get("contactName") || "Contato",
+    avatarUrl: searchParams.get("avatarUrl") || "",
+    profileFrame: isProfileFrame(profileFrameParam) ? profileFrameParam : "status",
+    nameEffect: isNameEffect(nameEffectParam) ? nameEffectParam : "default",
+    status: toContactStatus(searchParams.get("status") || "online"),
     kind: searchParams.get("kind") === "message" ? "message" : "online",
     text: searchParams.get("text") || "",
   };
@@ -39,7 +50,7 @@ function NotificationWindow() {
 
   return (
     <main className="h-screen w-screen bg-transparent pb-3">
-      <div className="h-full w-full overflow-hidden rounded-[12px] bg-transparent">
+      <div className="overflow-hidden rounded-[12px] bg-transparent">
         <MessengerNotification
           notification={notification}
           onClose={() => void appWindow.close()}

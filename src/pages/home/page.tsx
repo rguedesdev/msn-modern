@@ -1,6 +1,8 @@
 // Imports Principais
 import { useState, useEffect, useRef, useMemo, useCallback, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 
 // Importa as funções nativas do Tauri para controle de janelas
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -10,20 +12,49 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow"; // Para cria
 // Componentes
 import { PictureFrame } from "../../shared/constants/PictureFrame/page";
 import { Input } from "../../shared/components/Input";
+import { MediaSourceIcon } from "../../shared/components/MediaSourceIcon";
 
 // Constants
 import { getTextEffectStyle } from "../../shared/constants/TextEffects/page";
-import { STATUS_CONFIG } from "../../shared/constants/StatusConfig/page";
-import { getChatMessages } from "../../shared/utils/chatStorage";
-import type { MessengerNotificationData } from "../../shared/components/MessengerNotification";
+import {
+  PROFILE_STYLE_OPTIONS,
+  type NameEffect,
+  type ProfileFrame,
+} from "../../shared/constants/ProfileStyle/page";
+import {
+  isUserStatus,
+  LOGIN_STATUS_STORAGE_KEY,
+  STATUS_CONFIG,
+  type UserStatus,
+} from "../../shared/constants/StatusConfig/page";
+import {
+  CONTACT_STATUS_FRAMES,
+  toContactStatus,
+  type ContactStatus,
+} from "../../shared/constants/ContactStatusFrame/page";
+import {
+  MessengerNotification,
+  type MessengerNotificationData,
+} from "../../shared/components/MessengerNotification";
 import { showStyledNotificationWindow } from "../../shared/utils/styledNotification";
 import { useAuth } from "../../shared/auth/AuthContext";
+import { resolveApiAssetUrl } from "../../shared/api/client";
 import {
   createDirectConversation,
   findUserByEmail,
   listConversations,
 } from "../../shared/api/conversations";
 import { connectRealtime } from "../../shared/api/realtime";
+import type { Socket } from "socket.io-client";
+import { decryptEnvelope, registerCurrentDevice } from "../../shared/api/e2ee";
+import {
+  addContactFormSchema,
+  personalMessageFormSchema,
+  type AddContactFormData,
+  type AddContactFormInput,
+  type PersonalMessageFormData,
+  type PersonalMessageFormInput,
+} from "../../shared/validation/forms";
 
 // Icones
 import { TbPhoneCall } from "react-icons/tb";
@@ -34,49 +65,122 @@ import {
   MdCropSquare,
   MdMinimize,
   MdMusicNote,
-  MdOutlinePerson,
+  MdLockOutline,
+  MdOutlineContacts,
+  MdOutlineDelete,
+  MdOutlinePhotoCamera,
   MdOutlinePersonAddAlt,
   MdOutlinePersonOff,
   MdOutlineGroups,
+  MdPalette,
+  MdPersonOutline,
+  MdSettings,
 } from "react-icons/md";
-import {
-  FaAmazon,
-  FaLine,
-  FaNapster,
-  FaSpotify,
-} from "react-icons/fa";
 import { ImMakeGroup } from "react-icons/im";
-import { RiDiscFill } from "react-icons/ri";
-import {
-  SiApplemusic,
-  SiAudiomack,
-  SiBandcamp,
-  SiPandora,
-  SiSoundcloud,
-  SiTidal,
-  SiYoutube,
-  SiYoutubemusic,
-} from "react-icons/si";
 
 // Imagens
 import AnimeAds from "../../assets/images/ads-anime.jpg";
-import Radio89Logo from "../../assets/images/streamings/89-radio-rock.png";
-import AsiaDreamRadioLogo from "../../assets/images/streamings/asia-dream-radio.jpg";
-import DeezerLogo from "../../assets/images/streamings/deezer-logo.svg";
-import KissFmLogo from "../../assets/images/streamings/kiss-fm-logo.svg";
-import RadioJHeroLogo from "../../assets/images/streamings/radio-jhero.png";
 import onlineSound from "../../assets/sounds/msn-online.mp3";
 import messageSound from "../../assets/sounds/msn-message.mp3";
-
-type ContactStatus = "online" | "ocupado" | "ausente" | "offline";
 
 interface Contact {
   id: string;
   userId: string;
   name: string;
+  avatarUrl: string;
+  profileFrame: ProfileFrame;
+  nameEffect: NameEffect;
   status: ContactStatus;
   msg: string;
+  musicSource: string;
   group: string;
+}
+
+function ContactActivity({ contact }: { contact: Contact }) {
+  if (!contact.msg) return null;
+
+  return (
+    <span className="relative -top-1 flex h-[18px] min-w-0 items-end gap-1.5 text-xs leading-4 italic text-[#7894a2]">
+      {contact.musicSource && (
+        <span
+          className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center not-italic ${
+            contact.musicSource.toLowerCase().includes("spotify")
+              ? "text-[14px]"
+              : "text-[16px]"
+          } ${
+            contact.musicSource.toLowerCase().includes("deezer")
+              ? "scale-[0.875]"
+              : ""
+          } ${
+            contact.musicSource.toLowerCase().includes("89 a rádio rock")
+              ? "scale-[0.7222]"
+              : ""
+          } ${
+            contact.musicSource.toLowerCase().includes("rádio j-hero")
+              ? "scale-[0.8889]"
+              : ""
+          } ${
+            contact.musicSource.toLowerCase().includes("asia dream radio")
+              ? "scale-[0.8889]"
+              : ""
+          } ${
+            contact.musicSource.toLowerCase().includes("amazon")
+              ? "scale-[0.9375]"
+              : ""
+          } ${
+            contact.musicSource.toLowerCase().includes("kiss fm")
+              ? "scale-[0.9444]"
+              : ""
+          } ${
+            contact.musicSource.toLowerCase().includes("alpha fm")
+              ? "scale-[0.8333]"
+              : ""
+          }`}
+        >
+          <MediaSourceIcon source={contact.musicSource} />
+        </span>
+      )}
+      <span className="truncate">{contact.msg}</span>
+    </span>
+  );
+}
+
+function ContactStatusFrame({
+  contact,
+}: {
+  contact: Contact;
+}) {
+  const frame = CONTACT_STATUS_FRAMES[contact.status];
+
+  return (
+    <div
+      role="img"
+      aria-label={`${contact.name}, ${frame.label}`}
+      title={frame.label}
+      className="shrink-0 rounded-[7px] p-[3px] shadow-[0_1px_3px_rgba(45,91,113,0.22)] ring-1 ring-white/90"
+      style={{ background: frame.background }}
+    >
+      <div
+        className="h-8 w-8 overflow-hidden rounded-[6px] bg-white shadow-inner"
+      >
+        {contact.avatarUrl ? (
+          <img
+            src={resolveApiAssetUrl(contact.avatarUrl)}
+            alt=""
+            aria-hidden="true"
+            className="h-full w-full object-cover object-center"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#e7f6f2] via-[#ccebe5] to-[#a9d3e4] text-sm font-bold text-[#438d73]"
+          >
+            {contact.name.trim().charAt(0).toLocaleUpperCase("pt-BR") || "U"}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 interface MediaInfo {
@@ -463,161 +567,127 @@ function formatMediaDescription(media: MediaInfo) {
   return `${media.artist} — ${media.title} ♫`;
 }
 
-function MediaSourceIcon({ source }: { source: string }) {
-  const normalizedSource = source.toLowerCase();
-
-  if (normalizedSource.includes("spotify")) {
-    return <FaSpotify aria-label="Spotify" className="text-[#1db954]" />;
-  }
-
-  if (normalizedSource.includes("amazon")) {
-    return <FaAmazon aria-label="Amazon Music" className="text-[#00a8e1]" />;
-  }
-
-  if (normalizedSource.includes("deezer")) {
-    return (
-      <img
-        src={DeezerLogo}
-        alt="Deezer"
-        className="h-[16px] w-[16px] object-contain"
-      />
-    );
-  }
-
-  if (normalizedSource.includes("kiss fm")) {
-    return (
-      <img
-        src={KissFmLogo}
-        alt="Kiss FM"
-        className="h-[18px] w-[18px] object-contain"
-      />
-    );
-  }
-
-  if (normalizedSource.includes("asia dream radio")) {
-    return (
-      <img
-        src={AsiaDreamRadioLogo}
-        alt="Asia DREAM Radio"
-        className="h-[18px] w-[18px] rounded-sm object-contain"
-      />
-    );
-  }
-
-  if (normalizedSource.includes("rádio j-hero")) {
-    return (
-      <img
-        src={RadioJHeroLogo}
-        alt="Rádio J-Hero"
-        className="h-[18px] w-[18px] rounded-sm object-contain"
-      />
-    );
-  }
-
-  if (normalizedSource.includes("89 a rádio rock")) {
-    return (
-      <span className="block h-[18px] w-[18px] overflow-hidden rounded-sm bg-black">
-        <img
-          src={Radio89Logo}
-          alt="89 A Rádio Rock"
-          className="h-full w-auto max-w-none object-contain object-left"
-        />
-      </span>
-    );
-  }
-
-  if (normalizedSource.includes("tidal")) {
-    return <SiTidal aria-label="TIDAL" className="text-black" />;
-  }
-
-  if (normalizedSource.includes("youtube music")) {
-    return <SiYoutubemusic aria-label="YouTube Music" className="text-red-600" />;
-  }
-
-  if (normalizedSource.includes("youtube")) {
-    return <SiYoutube aria-label="YouTube" className="text-red-600" />;
-  }
-
-  if (normalizedSource.includes("apple music")) {
-    return <SiApplemusic aria-label="Apple Music" className="text-[#fa243c]" />;
-  }
-
-  if (normalizedSource.includes("napster")) {
-    return <FaNapster aria-label="Napster" className="text-[#171717]" />;
-  }
-
-  if (normalizedSource.includes("line music")) {
-    return <FaLine aria-label="LINE MUSIC" className="text-[#06c755]" />;
-  }
-
-  if (normalizedSource.includes("soundcloud")) {
-    return <SiSoundcloud aria-label="SoundCloud" className="text-[#ff5500]" />;
-  }
-
-  if (normalizedSource.includes("pandora")) {
-    return <SiPandora aria-label="Pandora" className="text-[#3668ff]" />;
-  }
-
-  if (normalizedSource.includes("bandcamp")) {
-    return <SiBandcamp aria-label="Bandcamp" className="text-[#1da0c3]" />;
-  }
-
-  if (normalizedSource.includes("audiomack")) {
-    return <SiAudiomack aria-label="Audiomack" className="text-[#ffa200]" />;
-  }
-
-  const streamingWithoutBundledIcon = [
-    "qobuz",
-    "anghami",
-    "jiosaavn",
-    "boomplay",
-  ];
-
-  if (
-    streamingWithoutBundledIcon.some((service) =>
-      normalizedSource.includes(service),
-    )
-  ) {
-    return <MdMusicNote aria-label={source} />;
-  }
-
-  return (
-    <RiDiscFill
-      aria-label={source || "Player de música"}
-      className="text-black"
-    />
-  );
-}
-
 const INITIAL_CONTACTS: Contact[] = [];
 const ENABLE_LISTENING_ACTIVITY = true;
 const SHARE_LISTENING_ACTIVITY_KEY = "msn-share-listening-activity";
 
+async function prepareProfileImage(file: File): Promise<File> {
+  if (!/^image\/(?:jpeg|png|webp)$/.test(file.type)) {
+    throw new Error("Escolha uma imagem JPG, PNG ou WebP");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("A imagem original deve ter no máximo 5 MB");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Não foi possível abrir a imagem"));
+      image.src = objectUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    const outputSize = 320;
+    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+    const sourceX = (image.naturalWidth - sourceSize) / 2;
+    const sourceY = (image.naturalHeight - sourceSize) / 2;
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível processar a imagem");
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceSize,
+      sourceSize,
+      0,
+      0,
+      outputSize,
+      outputSize,
+    );
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => result ? resolve(result) : reject(new Error("Não foi possível processar a imagem")),
+        "image/jpeg",
+        0.86,
+      );
+    });
+    return new File([blob], "avatar.jpg", { type: "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function initialUserStatus(): UserStatus {
+  const storedStatus = sessionStorage.getItem(LOGIN_STATUS_STORAGE_KEY);
+  return isUserStatus(storedStatus) ? storedStatus : "online";
+}
+
 function HomePage() {
-  const { user, signOut } = useAuth();
+  const {
+    user,
+    signOut,
+    removeAvatar,
+    updateAvatar,
+    updatePassword,
+    updatePersonalMessage,
+    updateProfile,
+  } = useAuth();
   const navigate = useNavigate();
   const appWindow = useMemo(() => (isTauri() ? getCurrentWindow() : null), []);
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [activeChat, setActiveChat] = useState<Contact | null>(null); // Armazena a conversa aberta interna (modo maximizado)
   const [contatos, setContatos] = useState<Contact[]>(INITIAL_CONTACTS);
+  const contatosRef = useRef<Contact[]>(INITIAL_CONTACTS);
+  const onlineUserIdsRef = useRef(new Set<string>());
+  const realtimeProfilesRef = useRef(new Map<string, {
+    personalMessage: string;
+    music: string;
+    musicSource: string;
+  }>());
+  const ownRealtimeProfileRef = useRef({
+    personalMessage: "",
+    music: "",
+    musicSource: "",
+  });
+  const realtimeSocketRef = useRef<Socket | null>(null);
+  const [browserNotification, setBrowserNotification] =
+    useState<MessengerNotificationData | null>(null);
   const [isLoadingContacts, setIsLoadingContacts] = useState(true);
   const [contactsError, setContactsError] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [isAddingContact, setIsAddingContact] = useState(false);
-  const [newContactEmail, setNewContactEmail] = useState("");
-  const [addContactError, setAddContactError] = useState("");
-  const [isAddingContactPending, setIsAddingContactPending] = useState(false);
   const onlineAudioRef = useRef<HTMLAudioElement | null>(null);
   const messageAudioRef = useRef<HTMLAudioElement | null>(null);
-  const previousContactStatusesRef = useRef(
-    new Map(INITIAL_CONTACTS.map((contact) => [contact.id, contact.status])),
-  );
+  const onlineNotificationTimesRef = useRef(new Map<string, number>());
 
-  const [status, setStatus] =
-    useState<keyof typeof STATUS_CONFIG>("ausente");
+  const [status, setStatus] = useState<UserStatus>(initialUserStatus);
+  const statusRef = useRef<UserStatus>(status);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
-  const [personalMessage, setPersonalMessage] = useState("");
-  const [personalMessageDraft, setPersonalMessageDraft] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [displayNameDraft, setDisplayNameDraft] = useState(() => user?.displayName ?? "");
+  const [profileFrameDraft, setProfileFrameDraft] = useState<ProfileFrame>(
+    () => user?.profileFrame ?? "status",
+  );
+  const [nameEffectDraft, setNameEffectDraft] = useState<NameEffect>(
+    () => user?.nameEffect ?? "default",
+  );
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [profileSettingsMessage, setProfileSettingsMessage] = useState("");
+  const [profileSettingsError, setProfileSettingsError] = useState("");
+  const [passwordSettingsMessage, setPasswordSettingsMessage] = useState("");
+  const [passwordSettingsError, setPasswordSettingsError] = useState("");
+  const [isSavingProfileSettings, setIsSavingProfileSettings] = useState(false);
+  const [isSavingAppearance, setIsSavingAppearance] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [personalMessage, setPersonalMessage] = useState(
+    () => user?.personalMessage ?? "",
+  );
   const [isEditingPersonalMessage, setIsEditingPersonalMessage] =
     useState(false);
   const [shareListeningActivity, setShareListeningActivity] = useState(
@@ -626,6 +696,56 @@ function HomePage() {
       localStorage.getItem(SHARE_LISTENING_ACTIVITY_KEY) === "true",
   );
   const [currentMedia, setCurrentMedia] = useState<MediaInfo | null>(null);
+
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !settingsRef.current?.contains(target)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSettingsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isSettingsOpen]);
+
+  const {
+    register: registerAddContact,
+    handleSubmit: submitAddContact,
+    reset: resetAddContact,
+    clearErrors: clearAddContactErrors,
+    setError: setAddContactError,
+    formState: {
+      errors: addContactErrors,
+      isSubmitting: isAddingContactPending,
+    },
+  } = useForm<AddContactFormInput, unknown, AddContactFormData>({
+    resolver: zodResolver(addContactFormSchema),
+    defaultValues: { email: "" },
+  });
+  const {
+    register: registerPersonalMessage,
+    handleSubmit: submitPersonalMessage,
+    setValue: setPersonalMessageValue,
+    clearErrors: clearPersonalMessageErrors,
+    setError: setPersonalMessageError,
+    formState: {
+      errors: personalMessageErrors,
+      isSubmitting: isSavingPersonalMessage,
+    },
+  } = useForm<PersonalMessageFormInput, unknown, PersonalMessageFormData>({
+    resolver: zodResolver(personalMessageFormSchema),
+    defaultValues: { personalMessage: "" },
+  });
 
   const loadContacts = useCallback(async () => {
     if (!user) return;
@@ -641,11 +761,24 @@ function HomePage() {
           id: conversation._id,
           userId: participant._id,
           name: participant.displayName,
-          status: "offline",
-          msg: participant.email,
+          avatarUrl: participant.avatarUrl ?? "",
+          profileFrame: participant.profileFrame ?? "status",
+          nameEffect: participant.nameEffect ?? "default",
+          status: onlineUserIdsRef.current.has(participant._id) ? "online" : "offline",
+          msg: (() => {
+            const profile = realtimeProfilesRef.current.get(participant._id);
+            return profile
+              ? profile.music || profile.personalMessage
+              : participant.personalMessage || "";
+          })(),
+          musicSource: (() => {
+            const profile = realtimeProfilesRef.current.get(participant._id);
+            return profile?.music ? profile.musicSource : "";
+          })(),
           group: "Geral",
         }];
       });
+      contatosRef.current = mappedContacts;
       setContatos(mappedContacts);
     } catch (error) {
       setContactsError(error instanceof Error ? error.message : "Erro ao carregar contatos");
@@ -660,57 +793,328 @@ function HomePage() {
   }, [loadContacts]);
 
   useEffect(() => {
-    const socket = connectRealtime((encryptedMessage) => {
-      const contact = contatos.find((item) => item.id === encryptedMessage.conversationId);
-      if (!contact || encryptedMessage.senderUserId === user?.id) return;
+    contatosRef.current = contatos;
+  }, [contatos]);
 
-      const notification: MessengerNotificationData = {
-        id: Date.now(),
-        contactId: contact.id,
-        contactName: contact.name,
-        kind: "message",
-        text: "Nova mensagem criptografada recebida.",
-      };
-      if (isTauri()) void showStyledNotificationWindow(notification);
-      const audio = messageAudioRef.current;
-      if (audio) {
-        audio.currentTime = 0;
-        void audio.play();
+  const showNotification = useCallback((notification: MessengerNotificationData) => {
+    if (isTauri()) {
+      void showStyledNotificationWindow(notification).catch((error) => {
+        console.error("Erro ao exibir notificação:", error);
+      });
+      return;
+    }
+    setBrowserNotification(notification);
+  }, []);
+
+  const notifyContactOnline = useCallback((contact: Contact) => {
+    const now = Date.now();
+    const lastNotification = onlineNotificationTimesRef.current.get(contact.userId) ?? 0;
+    if (now - lastNotification < 1_500) return;
+    onlineNotificationTimesRef.current.set(contact.userId, now);
+
+    showNotification({
+      id: now,
+      contactId: contact.id,
+      contactName: contact.name,
+      avatarUrl: contact.avatarUrl,
+      profileFrame: contact.profileFrame,
+      nameEffect: contact.nameEffect,
+      status: "online",
+      kind: "online",
+      text: "acabou de entrar.",
+    });
+
+    const audio = onlineAudioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    void audio.play().catch((error) => {
+      console.error("Erro ao reproduzir notificação de contato online:", error);
+    });
+  }, [showNotification]);
+
+  useEffect(() => {
+    if (!browserNotification) return;
+    const notificationId = browserNotification.id;
+    const timer = window.setTimeout(() => {
+      setBrowserNotification((current) => current?.id === notificationId ? null : current);
+    }, 5_000);
+    return () => window.clearTimeout(timer);
+  }, [browserNotification]);
+
+  const openConversation = useCallback(async (contact: Contact, nudge = false) => {
+    const chatParams = new URLSearchParams({
+      status: contact.status,
+      name: contact.name,
+      message: contact.msg,
+      musicSource: contact.musicSource,
+      avatarUrl: contact.avatarUrl,
+      profileFrame: contact.profileFrame,
+      nameEffect: contact.nameEffect,
+      ownStatus: statusRef.current,
+      ownProfileFrame: user?.profileFrame ?? "status",
+      ownNameEffect: user?.nameEffect ?? "default",
+      userId: contact.userId,
+    });
+    if (nudge) chatParams.set("nudge", String(Date.now()));
+
+    if (!appWindow) {
+      navigate(`/chat/${contact.id}?${chatParams.toString()}`);
+      return;
+    }
+
+    const label = `chat-${contact.id}`;
+    const existing = await WebviewWindow.getByLabel(label);
+    if (existing) {
+      if (!nudge) {
+        await existing.unminimize();
+        await existing.show();
+        await existing.setFocus();
       }
+      return;
+    }
+
+    new WebviewWindow(label, {
+      url: `index.html#/chat/${contact.id}?${chatParams.toString()}`,
+      title: `Conversa com ${contact.name}`,
+      width: 900,
+      height: 640,
+      resizable: true,
+      decorations: false,
+      transparent: true,
+      shadow: false,
+      backgroundColor: [0, 0, 0, 0],
+      visible: false,
+    });
+  }, [appWindow, navigate, user?.nameEffect, user?.profileFrame]);
+
+  useEffect(() => {
+    if (!user || isLoadingContacts) return;
+    const socket = connectRealtime((encryptedMessage) => {
+      const contact = contatosRef.current.find((item) => item.id === encryptedMessage.conversationId);
+      if (!contact || encryptedMessage.senderUserId === user.id) return;
+
+      void (async () => {
+        let text = "Enviou uma mensagem.";
+        try {
+          const identity = await registerCurrentDevice(user.id);
+          const envelope = encryptedMessage.envelopes.find(
+            (item) => item.recipientDeviceId === identity.deviceId,
+          );
+          if (envelope) {
+            text = await decryptEnvelope(
+              user.id,
+              encryptedMessage.conversationId,
+              envelope.payload,
+            );
+          }
+        } catch (error) {
+          console.error("Não foi possível descriptografar a prévia da notificação:", error);
+        }
+
+        showNotification({
+          id: Date.now(),
+          contactId: contact.id,
+          contactName: contact.name,
+          avatarUrl: contact.avatarUrl,
+          profileFrame: contact.profileFrame,
+          nameEffect: contact.nameEffect,
+          status: contact.status,
+          kind: "message",
+          text,
+        });
+        const audio = messageAudioRef.current;
+        if (audio) {
+          audio.currentTime = 0;
+          void audio.play();
+        }
+      })();
     }, (onlineUserIds) => {
       const online = new Set(onlineUserIds);
-      setContatos((current) => current.map((contact) => ({
-        ...contact,
-        status: online.has(contact.userId) ? "online" : "offline",
-      })));
+      onlineUserIdsRef.current = online;
+      setContatos((current) => {
+        let changed = false;
+        const updated = current.map((contact) => {
+          const status: ContactStatus = online.has(contact.userId) ? "online" : "offline";
+          if (contact.status === status) return contact;
+          changed = true;
+          return { ...contact, status };
+        });
+        const result = changed ? updated : current;
+        contatosRef.current = result;
+        return result;
+      });
     }, ({ userId, online }) => {
+      if (online) onlineUserIdsRef.current.add(userId);
+      else onlineUserIdsRef.current.delete(userId);
+      if (online) return;
+
+      setContatos((current) => {
+        const offlineStatus: ContactStatus = "offline";
+        let changed = false;
+        const updated = current.map((contact) => {
+          if (contact.userId !== userId || contact.status === "offline") return contact;
+          changed = true;
+          return { ...contact, status: offlineStatus };
+        });
+        const result = changed ? updated : current;
+        contatosRef.current = result;
+        return result;
+      });
+    }, (nudge) => {
+      const contact = contatosRef.current.find(
+        (item) => item.id === nudge.conversationId && item.userId === nudge.senderUserId,
+      );
+      if (contact) void openConversation(contact, true);
+    }, (profiles) => {
+      realtimeProfilesRef.current = new Map(
+        profiles.map((profile) => [profile.userId, profile]),
+      );
+      setContatos((current) => current.map((contact) => {
+        const profile = realtimeProfilesRef.current.get(contact.userId);
+        if (!profile) return contact;
+        const msg = profile?.music || profile?.personalMessage || "";
+        const musicSource = profile?.music ? profile.musicSource : "";
+        return contact.msg === msg && contact.musicSource === musicSource
+          ? contact
+          : { ...contact, msg, musicSource };
+      }));
+    }, (profile) => {
+      realtimeProfilesRef.current.set(profile.userId, profile);
+      const msg = profile.music || profile.personalMessage || "";
+      const musicSource = profile.music ? profile.musicSource : "";
       setContatos((current) => current.map((contact) =>
-        contact.userId === userId ? { ...contact, status: online ? "online" : "offline" } : contact,
+        contact.userId === profile.userId &&
+          (contact.msg !== msg || contact.musicSource !== musicSource)
+          ? { ...contact, msg, musicSource }
+          : contact,
       ));
+    }, (statuses) => {
+      const statusByUserId = new Map(
+        statuses.map((item) => [item.userId, item.status]),
+      );
+      onlineUserIdsRef.current = new Set(
+        statuses
+          .filter((item) => item.status !== "offline")
+          .map((item) => item.userId),
+      );
+      setContatos((current) => {
+        const updated = current.map((contact) => ({
+          ...contact,
+          status: statusByUserId.get(contact.userId) ?? "offline",
+        }));
+        contatosRef.current = updated;
+        return updated;
+      });
+    }, ({ userId, status: contactStatus }) => {
+      if (contactStatus === "offline") onlineUserIdsRef.current.delete(userId);
+      else onlineUserIdsRef.current.add(userId);
+      const contactBeforeChange = contatosRef.current.find(
+        (contact) => contact.userId === userId,
+      );
+      const shouldNotifyOnline = Boolean(
+        contactStatus === "online" &&
+        contactBeforeChange &&
+        contactBeforeChange.status !== "online",
+      );
+      setContatos((current) => {
+        let changed = false;
+        const updated = current.map((contact) => {
+          if (contact.userId !== userId || contact.status === contactStatus) return contact;
+          changed = true;
+          return { ...contact, status: contactStatus };
+        });
+        const result = changed ? updated : current;
+        contatosRef.current = result;
+        return result;
+      });
+      if (shouldNotifyOnline && contactBeforeChange) {
+        notifyContactOnline(contactBeforeChange);
+      }
+    }, statusRef.current, (account) => {
+      setContatos((current) => {
+        let changed = false;
+        const updated = current.map((contact) => {
+          if (contact.userId !== account.userId) return contact;
+          if (
+            contact.name === account.displayName &&
+            contact.avatarUrl === account.avatarUrl &&
+            contact.profileFrame === account.profileFrame &&
+            contact.nameEffect === account.nameEffect
+          ) {
+            return contact;
+          }
+          changed = true;
+          return {
+            ...contact,
+            name: account.displayName,
+            avatarUrl: account.avatarUrl,
+            profileFrame: account.profileFrame,
+            nameEffect: account.nameEffect,
+          };
+        });
+        const result = changed ? updated : current;
+        contatosRef.current = result;
+        return result;
+      });
     });
+    realtimeSocketRef.current = socket;
+    const publishRealtimeState = () => {
+      socket?.emit("profile:update", ownRealtimeProfileRef.current);
+      socket?.emit("status:update", { status: statusRef.current });
+    };
+    socket?.on("connect", publishRealtimeState);
+    if (socket?.connected) publishRealtimeState();
     return () => {
+      socket?.off("connect", publishRealtimeState);
+      realtimeSocketRef.current = null;
       socket?.disconnect();
     };
-  }, [contatos, user?.id]);
+  }, [isLoadingContacts, notifyContactOnline, openConversation, showNotification, user]);
 
-  async function handleAddContact(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAddContactError("");
-    setIsAddingContactPending(true);
+  useEffect(() => {
+    const profile = {
+      personalMessage,
+      music: shareListeningActivity && currentMedia
+        ? formatMediaDescription(currentMedia)
+        : "",
+      musicSource: shareListeningActivity && currentMedia ? currentMedia.source : "",
+    };
+    ownRealtimeProfileRef.current = profile;
+    realtimeSocketRef.current?.emit("profile:update", profile);
+  }, [currentMedia, personalMessage, shareListeningActivity]);
+
+  const changeStatus = (nextStatus: UserStatus) => {
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+    sessionStorage.setItem(LOGIN_STATUS_STORAGE_KEY, nextStatus);
+    const socket = realtimeSocketRef.current;
+    if (socket && typeof socket.auth !== "function") {
+      socket.auth = { ...socket.auth, status: nextStatus };
+    }
+    socket?.emit("status:update", { status: nextStatus });
+    setIsStatusMenuOpen(false);
+  };
+
+  const addContact = async ({ email }: AddContactFormData) => {
     try {
-      const foundUser = await findUserByEmail(newContactEmail);
+      const foundUser = await findUserByEmail(email);
       if (!foundUser) throw new Error("Nenhum usuário encontrado com esse e-mail");
       if (foundUser.id === user?.id) throw new Error("Você não pode adicionar a si mesmo");
       await createDirectConversation(foundUser.id);
-      setNewContactEmail("");
+      resetAddContact();
       setIsAddingContact(false);
       await loadContacts();
     } catch (error) {
-      setAddContactError(error instanceof Error ? error.message : "Erro ao adicionar contato");
-    } finally {
-      setIsAddingContactPending(false);
+      setAddContactError("root.server", {
+        message: error instanceof Error ? error.message : "Erro ao adicionar contato",
+      });
     }
-  }
+  };
+
+  const handleAddContact = (event: FormEvent<HTMLFormElement>) => {
+    void submitAddContact(addContact)(event);
+  };
 
   async function handleLogout() {
     await signOut();
@@ -718,13 +1122,138 @@ function HomePage() {
   }
 
   const startEditingPersonalMessage = () => {
-    setPersonalMessageDraft(personalMessage);
+    setPersonalMessageValue("personalMessage", personalMessage);
+    clearPersonalMessageErrors();
     setIsEditingPersonalMessage(true);
   };
 
-  const savePersonalMessage = () => {
-    setPersonalMessage(personalMessageDraft.trim());
-    setIsEditingPersonalMessage(false);
+  const savePersonalMessage = async ({ personalMessage: value }: PersonalMessageFormData) => {
+    try {
+      await updatePersonalMessage(value);
+      setPersonalMessage(value);
+      setIsEditingPersonalMessage(false);
+    } catch (error) {
+      setPersonalMessageError("root.server", {
+        message: error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a frase de perfil",
+      });
+    }
+  };
+
+  const handleSavePersonalMessage = () => {
+    void submitPersonalMessage(savePersonalMessage)();
+  };
+
+  const saveDisplayName = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const displayName = displayNameDraft.trim();
+    setProfileSettingsMessage("");
+    setProfileSettingsError("");
+    if (!displayName) {
+      setProfileSettingsError("Informe um nome de exibição");
+      return;
+    }
+    if (displayName.length > 80) {
+      setProfileSettingsError("O nome deve ter no máximo 80 caracteres");
+      return;
+    }
+
+    setIsSavingProfileSettings(true);
+    try {
+      await updateProfile({ displayName });
+      setDisplayNameDraft(displayName);
+      setProfileSettingsMessage("Nome atualizado.");
+    } catch (error) {
+      setProfileSettingsError(
+        error instanceof Error ? error.message : "Não foi possível atualizar o nome",
+      );
+    } finally {
+      setIsSavingProfileSettings(false);
+    }
+  };
+
+  const saveAppearance = async () => {
+    setProfileSettingsMessage("");
+    setProfileSettingsError("");
+    setIsSavingAppearance(true);
+    try {
+      await updateProfile({
+        profileFrame: profileFrameDraft,
+        nameEffect: nameEffectDraft,
+      });
+      setProfileSettingsMessage("Aparência atualizada.");
+    } catch (error) {
+      setProfileSettingsError(
+        error instanceof Error ? error.message : "Não foi possível atualizar a aparência",
+      );
+    } finally {
+      setIsSavingAppearance(false);
+    }
+  };
+
+  const changeProfileImage = async (file: File | undefined) => {
+    if (!file) return;
+    setProfileSettingsMessage("");
+    setProfileSettingsError("");
+    setIsSavingProfileSettings(true);
+    try {
+      const avatar = await prepareProfileImage(file);
+      await updateAvatar(avatar);
+      setProfileSettingsMessage("Imagem de perfil atualizada.");
+    } catch (error) {
+      setProfileSettingsError(
+        error instanceof Error ? error.message : "Não foi possível atualizar a imagem",
+      );
+    } finally {
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+      setIsSavingProfileSettings(false);
+    }
+  };
+
+  const removeProfileImage = async () => {
+    setProfileSettingsMessage("");
+    setProfileSettingsError("");
+    setIsSavingProfileSettings(true);
+    try {
+      await removeAvatar();
+      setProfileSettingsMessage("Imagem de perfil removida.");
+    } catch (error) {
+      setProfileSettingsError(
+        error instanceof Error ? error.message : "Não foi possível remover a imagem",
+      );
+    } finally {
+      setIsSavingProfileSettings(false);
+    }
+  };
+
+  const savePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordSettingsMessage("");
+    setPasswordSettingsError("");
+    if (newPassword.length < 10) {
+      setPasswordSettingsError("A nova senha deve ter pelo menos 10 caracteres");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordSettingsError("A confirmação não corresponde à nova senha");
+      return;
+    }
+
+    setIsSavingPassword(true);
+    try {
+      await updatePassword(currentPassword, newPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSettingsMessage("Senha atualizada.");
+    } catch (error) {
+      setPasswordSettingsError(
+        error instanceof Error ? error.message : "Não foi possível atualizar a senha",
+      );
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
   useEffect(() => {
@@ -818,6 +1347,7 @@ function HomePage() {
       const normalizedArtist = media.artist.toLowerCase();
       const normalizedTitle = media.title.toLowerCase();
       const isKissFm = normalizedSource.includes("kiss fm");
+      const isAlphaFm = normalizedSource.includes("alpha fm");
       const isAsiaDreamRadio = normalizedSource.includes("asia dream radio");
       const isRadioJHero = normalizedSource.includes("rádio j-hero");
       const isRadio89 = normalizedSource.includes("89 a rádio rock");
@@ -829,6 +1359,16 @@ function HomePage() {
           ["89fm ao vivo", "89 - a rádio rock", "89 a rádio rock"].includes(
             normalizedTitle,
           ));
+
+      if (isAlphaFm) {
+        return {
+          ...media,
+          title: normalizeKissFmText(media.title),
+          artist: media.artist === UNKNOWN_ARTIST
+            ? media.artist
+            : normalizeKissFmText(media.artist),
+        };
+      }
 
       if (
         (!isKissFm && !isAsiaDreamRadio && !isRadioJHero && !isRadio89) ||
@@ -901,17 +1441,7 @@ function HomePage() {
     void appWindow.setDecorations(false);
     void appWindow.setShadow(false);
 
-    // Verifica o estado inicial ao carregar a página
-    appWindow.isMaximized().then(setIsMaximized);
-
-    // Escuta mudanças de tamanho ou maximização em tempo real
-    const unlisten = appWindow.onResized(async () => {
-      const maximized = await appWindow.isMaximized();
-      setIsMaximized(maximized);
-    });
-
     return () => {
-      unlisten.then((f) => f());
       document.documentElement.style.background = previousHtmlBackground;
       document.body.style.background = previousBodyBackground;
     };
@@ -943,93 +1473,32 @@ function HomePage() {
     };
   }, []);
 
-  useEffect(() => {
-    const previousStatuses = previousContactStatusesRef.current;
-    const contactBecameOnline = contatos.find(
-      (contact) =>
-        contact.status === "online" &&
-        previousStatuses.get(contact.id) === "offline",
-    );
-
-    previousContactStatusesRef.current = new Map(
-      contatos.map((contact) => [contact.id, contact.status]),
-    );
-
-    if (!contactBecameOnline) return;
-
-    const notification: MessengerNotificationData = {
-      id: Date.now(),
-      contactId: contactBecameOnline.id,
-      contactName: contactBecameOnline.name,
-      kind: "online",
-      text: "acabou de entrar.",
-    };
-
-    if (isTauri()) {
-      void showStyledNotificationWindow(notification).catch((error) => {
-        console.error("Erro ao exibir notificação de contato online:", error);
-      });
-    }
-
-    const audio = onlineAudioRef.current;
-    if (!audio) return;
-
-    audio.pause();
-    audio.currentTime = 0;
-    void audio.play().catch((error) => {
-      console.error("Erro ao reproduzir notificação de contato online:", error);
-    });
-  }, [contatos]);
-
   // Lógica do duplo clique no contato
   const handleContactClick = (contato: Contact) => {
-    if (isMaximized || !appWindow) {
-      if (!appWindow) setIsMaximized(true);
-      setActiveChat(contato);
-    } else {
-      const chatParams = new URLSearchParams({
-        status: contato.status,
-        name: contato.name,
-        message: contato.msg,
-        userId: contato.userId,
-      });
-
-      // ⚠️ ALTERADO AQUI: Adicionado index.html antes do hash #
-      const chatWindow = new WebviewWindow(`chat-${contato.id}`, {
-        url: `index.html#/chat/${contato.id}?${chatParams.toString()}`,
-        title: `Conversa com ${contato.name}`,
-        width: 900,
-        height: 640,
-        resizable: true,
-        decorations: false,
-        transparent: true,
-        shadow: false,
-        backgroundColor: [0, 0, 0, 0],
-        visible: false,
-      });
-
-      chatWindow.once("tauri://created", () => {
-        console.log("Janela de chat aberta!");
-      });
-    }
+    void openConversation(contato);
   };
 
-  // 1. Estado para controlar qual aba está ativa (Padrão: geral/online)
+  // 1. Estado para controlar qual aba está ativa
   const [activeTab, setActiveTab] = useState("geral");
 
   // 3. Configuração visual e lógica das abas
   const tabsConfig = [
     {
-      id: "geral",
-      label: "Contatos",
-      icon: <MdOutlinePerson size={18} />,
+      id: "online",
+      label: "Online",
+      icon: <MdPersonOutline size={18} />,
     },
-    { id: "grupos", label: "Grupos", icon: <MdOutlineGroups size={18} /> },
     {
       id: "offlines",
       label: "Offline",
       icon: <MdOutlinePersonOff size={18} />,
     },
+    {
+      id: "geral",
+      label: "Contatos",
+      icon: <MdOutlineContacts size={18} />,
+    },
+    { id: "grupos", label: "Grupos", icon: <MdOutlineGroups size={18} /> },
   ];
 
   // 4. Função que filtra quais contatos aparecem baseando-se na aba ativa
@@ -1040,15 +1509,9 @@ function HomePage() {
           `${contact.name} ${contact.msg}`.toLocaleLowerCase("pt-BR").includes(normalizedSearch),
         )
       : contatos;
+    if (activeTab === "online") return searched.filter((c) => c.status !== "offline");
     if (activeTab === "offlines") return searched.filter((c) => c.status === "offline");
     return searched;
-  };
-
-  const statusColors: Record<ContactStatus, string> = {
-    online: "bg-green-500",
-    ocupado: "bg-red-500",
-    ausente: "bg-yellow-400",
-    offline: "bg-zinc-300",
   };
 
   return (
@@ -1123,19 +1586,391 @@ function HomePage() {
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
       {/* 1. SEÇÃO DO SEU PERFIL (MANTIDA NO TOPO) */}
-      <aside className="flex flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-gradient-to-br from-white/90 via-[#edf8fc]/90 to-[#cce7f2]/90 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.16)]">
-        <div className="flex flex-row gap-2 max-h-[140px]">
-          <PictureFrame />
+      <aside className="relative flex flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-gradient-to-br from-white/90 via-[#edf8fc]/90 to-[#cce7f2]/90 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.16)]">
+        <div
+          ref={settingsRef}
+          className="absolute right-3 top-3 z-40"
+        >
+          <button
+            type="button"
+            aria-label="Abrir configurações"
+            aria-expanded={isSettingsOpen}
+            aria-controls="profile-settings-panel"
+            title="Configurações"
+            onClick={() => {
+              if (!isSettingsOpen) {
+                setDisplayNameDraft(user?.displayName ?? "");
+                setProfileFrameDraft(user?.profileFrame ?? "status");
+                setNameEffectDraft(user?.nameEffect ?? "default");
+              }
+              setIsSettingsOpen((isOpen) => !isOpen);
+            }}
+            className={`grid h-8 w-8 place-items-center rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-[#65afd0]/40 ${
+              isSettingsOpen
+                ? "border-white bg-white/80 text-[#287da5] shadow-sm"
+                : "border-transparent text-[#527b90] hover:border-white hover:bg-white/70"
+            }`}
+          >
+            <MdSettings
+              aria-hidden="true"
+              size={20}
+              className={`transition-transform duration-300 ${isSettingsOpen ? "rotate-45" : ""}`}
+            />
+          </button>
+
+          {isSettingsOpen && (
+            <section
+              id="profile-settings-panel"
+              aria-label="Configurações do MSN"
+              className="absolute right-0 top-10 max-h-[680px] w-[340px] overflow-hidden rounded-[11px] border border-[#79a9bf] bg-gradient-to-b from-[#fafdff] to-[#e2f2f9] shadow-[0_12px_32px_rgba(35,76,98,0.28)]"
+            >
+              <div className="flex items-center border-b border-[#b9d3df] bg-white/45 px-3 py-2.5">
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-[#315f77]">
+                  <MdSettings aria-hidden="true" size={18} />
+                  <h2 className="text-sm font-semibold">Configurações</h2>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Fechar configurações"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="grid h-6 w-6 place-items-center rounded text-[#64879a] transition-colors hover:bg-white/80 hover:text-[#315f77]"
+                >
+                  <MdClose aria-hidden="true" size={16} />
+                </button>
+              </div>
+
+              <div className="max-h-[630px] space-y-4 overflow-y-auto p-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7894a2]">
+                  Perfil
+                </p>
+
+                <div className="flex items-center gap-3 rounded-lg border border-white/80 bg-white/55 p-3">
+                  <PictureFrame
+                    imageSrc={resolveApiAssetUrl(user?.avatarUrl) || undefined}
+                    imageAlt="Minha imagem de perfil"
+                    displayName={user?.displayName}
+                    imageSize={58}
+                    frame={user?.profileFrame ?? "status"}
+                    status={toContactStatus(status)}
+                  />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(event) => void changeProfileImage(event.currentTarget.files?.[0])}
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingProfileSettings}
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#79a9bf] bg-gradient-to-b from-white to-[#e5f3f9] px-2 py-1.5 text-[11px] font-semibold text-[#315f77] shadow-sm transition hover:border-[#4b97b9] hover:from-white hover:to-[#d7edf6] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <MdOutlinePhotoCamera aria-hidden="true" size={16} />
+                      Escolher imagem
+                    </button>
+                    {user?.avatarUrl && (
+                      <button
+                        type="button"
+                        disabled={isSavingProfileSettings}
+                        onClick={() => void removeProfileImage()}
+                        className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-[#6e8998] transition hover:bg-white/70 hover:text-[#b14c4c] disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <MdOutlineDelete aria-hidden="true" size={15} />
+                        Remover imagem
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <form onSubmit={saveDisplayName} className="space-y-2">
+                  <label className="block text-[11px] font-semibold text-[#52758a]">
+                    Nome de exibição
+                    <input
+                      type="text"
+                      value={displayNameDraft}
+                      maxLength={80}
+                      disabled={isSavingProfileSettings}
+                      onChange={(event) => setDisplayNameDraft(event.currentTarget.value)}
+                      className="mt-1 h-8 w-full rounded-md border border-[#9dbdcc] bg-white/90 px-2.5 text-xs font-normal text-[#31556a] outline-none shadow-inner transition focus:border-[#4d9fc4] focus:ring-2 focus:ring-[#70b9d8]/25 disabled:opacity-60"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={isSavingProfileSettings || displayNameDraft.trim() === user?.displayName}
+                    className="w-full cursor-pointer rounded-md border border-[#3989b1] bg-gradient-to-b from-[#54add2] to-[#2788b4] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:from-[#65b8d9] hover:to-[#217da7] disabled:cursor-default disabled:opacity-50"
+                  >
+                    {isSavingProfileSettings ? "Salvando..." : "Salvar nome"}
+                  </button>
+                </form>
+
+                <details className="group overflow-hidden rounded-lg border border-white/80 bg-white/55">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-xs font-semibold text-[#315f77] transition hover:bg-white/65 [&::-webkit-details-marker]:hidden">
+                    <MdPalette aria-hidden="true" size={17} />
+                    <span className="flex-1">Moldura e nome</span>
+                    <MdArrowDropDown
+                      aria-hidden="true"
+                      size={18}
+                      className="transition-transform duration-200 group-open:rotate-180"
+                    />
+                  </summary>
+
+                  <div className="space-y-4 border-t border-[#c7dce5] px-3 py-3">
+                    <fieldset disabled={isSavingAppearance}>
+                      <legend className="mb-2 text-[11px] font-semibold text-[#52758a]">
+                        Moldura da foto
+                      </legend>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          aria-pressed={profileFrameDraft === "status"}
+                          onClick={() => setProfileFrameDraft("status")}
+                          className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-left text-[11px] transition disabled:cursor-wait disabled:opacity-60 ${
+                            profileFrameDraft === "status"
+                              ? "border-[#3b96bd] bg-[#dff2fa] text-[#245f7b] shadow-[0_0_0_1px_rgba(59,150,189,0.18)]"
+                              : "border-[#b6d0dc] bg-white/75 text-[#52758a] hover:border-[#7eb5ca] hover:bg-white"
+                          }`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="h-5 w-5 shrink-0 rounded border-2 border-white shadow-sm"
+                            style={{ background: CONTACT_STATUS_FRAMES[toContactStatus(status)].background }}
+                          />
+                          Por status
+                        </button>
+                        {PROFILE_STYLE_OPTIONS.map((option) => {
+                          const isOwned = user?.ownedProfileFrames?.includes(option.id) ?? false;
+                          const isSelected = profileFrameDraft === option.id;
+                          return (
+                            <button
+                              key={`frame-${option.id}`}
+                              type="button"
+                              disabled={!isOwned || isSavingAppearance}
+                              aria-pressed={isSelected}
+                              title={isOwned ? option.label : `${option.label} — não adquirido`}
+                              onClick={() => setProfileFrameDraft(option.id)}
+                              className={`flex items-center gap-2 rounded-md border px-2 py-2 text-left text-[11px] transition ${
+                                isOwned ? "cursor-pointer" : "cursor-not-allowed opacity-55"
+                              } ${
+                                isSelected
+                                  ? "border-[#3b96bd] bg-[#dff2fa] text-[#245f7b] shadow-[0_0_0_1px_rgba(59,150,189,0.18)]"
+                                  : "border-[#b6d0dc] bg-white/75 text-[#52758a] hover:border-[#7eb5ca] hover:bg-white"
+                              }`}
+                            >
+                              <span
+                                aria-hidden="true"
+                                className="h-5 w-5 shrink-0 animate-[gradientMove_4s_linear_infinite] rounded border-2 border-white shadow-sm"
+                                style={{
+                                  background: option.background,
+                                  backgroundSize: "300% 100%",
+                                }}
+                              />
+                              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                              {!isOwned && <MdLockOutline aria-hidden="true" size={13} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+
+                    <fieldset disabled={isSavingAppearance}>
+                      <legend className="mb-2 text-[11px] font-semibold text-[#52758a]">
+                        Estilo do nome
+                      </legend>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          aria-pressed={nameEffectDraft === "default"}
+                          onClick={() => setNameEffectDraft("default")}
+                          className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-left text-[11px] transition disabled:cursor-wait disabled:opacity-60 ${
+                            nameEffectDraft === "default"
+                              ? "border-[#3b96bd] bg-[#dff2fa] text-[#245f7b] shadow-[0_0_0_1px_rgba(59,150,189,0.18)]"
+                              : "border-[#b6d0dc] bg-white/75 text-[#52758a] hover:border-[#7eb5ca] hover:bg-white"
+                          }`}
+                        >
+                          <span className="w-7 shrink-0 text-center text-sm font-extrabold text-[#31556a]">Aa</span>
+                          Padrão
+                        </button>
+                        {PROFILE_STYLE_OPTIONS.map((option) => {
+                          const isOwned = user?.ownedNameEffects?.includes(option.id) ?? false;
+                          const isSelected = nameEffectDraft === option.id;
+                          return (
+                            <button
+                              key={`name-${option.id}`}
+                              type="button"
+                              disabled={!isOwned || isSavingAppearance}
+                              aria-pressed={isSelected}
+                              title={isOwned ? option.label : `${option.label} — não adquirido`}
+                              onClick={() => setNameEffectDraft(option.id)}
+                              className={`flex items-center gap-2 rounded-md border px-2 py-2 text-left text-[11px] transition ${
+                                isOwned ? "cursor-pointer" : "cursor-not-allowed opacity-55"
+                              } ${
+                                isSelected
+                                  ? "border-[#3b96bd] bg-[#dff2fa] text-[#245f7b] shadow-[0_0_0_1px_rgba(59,150,189,0.18)]"
+                                  : "border-[#b6d0dc] bg-white/75 text-[#52758a] hover:border-[#7eb5ca] hover:bg-white"
+                              }`}
+                            >
+                              <span
+                                className="w-7 shrink-0 text-center text-sm font-extrabold"
+                                style={getTextEffectStyle(option.id)}
+                              >
+                                Aa
+                              </span>
+                              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                              {!isOwned && <MdLockOutline aria-hidden="true" size={13} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+
+                    <button
+                      type="button"
+                      disabled={
+                        isSavingAppearance ||
+                        (profileFrameDraft === (user?.profileFrame ?? "status") &&
+                          nameEffectDraft === (user?.nameEffect ?? "default"))
+                      }
+                      onClick={() => void saveAppearance()}
+                      className="w-full cursor-pointer rounded-md border border-[#3989b1] bg-gradient-to-b from-[#54add2] to-[#2788b4] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:from-[#65b8d9] hover:to-[#217da7] disabled:cursor-default disabled:opacity-50"
+                    >
+                      {isSavingAppearance ? "Salvando..." : "Salvar aparência"}
+                    </button>
+
+                    <p className="flex items-start gap-1.5 text-[10px] leading-4 text-[#7894a2]">
+                      <MdLockOutline aria-hidden="true" size={13} className="mt-0.5 shrink-0" />
+                      Itens com cadeado ficam disponíveis depois de adquiridos.
+                    </p>
+                  </div>
+                </details>
+
+                <label className="group flex cursor-pointer select-none items-start gap-3 rounded-lg border border-white/80 bg-white/55 p-3 transition-all duration-200 ease-out hover:border-[#9bc7da] hover:bg-white/85 hover:shadow-[0_2px_8px_rgba(50,125,160,0.10)]">
+                  <input
+                    type="checkbox"
+                    checked={shareListeningActivity}
+                    onChange={(event) => {
+                      const shouldShare = event.currentTarget.checked;
+                      setShareListeningActivity(shouldShare);
+                      if (shouldShare) setIsEditingPersonalMessage(false);
+                      else setCurrentMedia(null);
+                    }}
+                    className="msn-settings-checkbox mt-0.5 shrink-0"
+                  />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-[#315f77]">
+                      <MdMusicNote aria-hidden="true" size={16} />
+                      Exibir música no perfil
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-4 text-[#64879a]">
+                      Mostra aos seus contatos o que você está ouvindo no momento.
+                    </span>
+                  </span>
+                </label>
+
+                {(profileSettingsError || profileSettingsMessage) && (
+                  <p
+                    role={profileSettingsError ? "alert" : "status"}
+                    className={`rounded-md px-2.5 py-2 text-[11px] ${
+                      profileSettingsError
+                        ? "bg-red-50 text-red-700"
+                        : "bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    {profileSettingsError || profileSettingsMessage}
+                  </p>
+                )}
+
+                <div className="border-t border-[#b9d3df] pt-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7894a2]">
+                    <MdLockOutline aria-hidden="true" size={14} />
+                    Segurança
+                  </p>
+                  <form onSubmit={savePassword} className="space-y-2 rounded-lg border border-white/80 bg-white/55 p-3">
+                    <label className="block text-[11px] font-semibold text-[#52758a]">
+                      Senha atual
+                      <input
+                        type="password"
+                        value={currentPassword}
+                        autoComplete="current-password"
+                        required
+                        disabled={isSavingPassword}
+                        onChange={(event) => setCurrentPassword(event.currentTarget.value)}
+                        className="mt-1 h-8 w-full rounded-md border border-[#9dbdcc] bg-white/90 px-2.5 text-xs font-normal text-[#31556a] outline-none shadow-inner transition focus:border-[#4d9fc4] focus:ring-2 focus:ring-[#70b9d8]/25 disabled:opacity-60"
+                      />
+                    </label>
+                    <label className="block text-[11px] font-semibold text-[#52758a]">
+                      Nova senha
+                      <input
+                        type="password"
+                        value={newPassword}
+                        autoComplete="new-password"
+                        minLength={10}
+                        required
+                        disabled={isSavingPassword}
+                        onChange={(event) => setNewPassword(event.currentTarget.value)}
+                        className="mt-1 h-8 w-full rounded-md border border-[#9dbdcc] bg-white/90 px-2.5 text-xs font-normal text-[#31556a] outline-none shadow-inner transition focus:border-[#4d9fc4] focus:ring-2 focus:ring-[#70b9d8]/25 disabled:opacity-60"
+                      />
+                    </label>
+                    <label className="block text-[11px] font-semibold text-[#52758a]">
+                      Confirmar nova senha
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        autoComplete="new-password"
+                        minLength={10}
+                        required
+                        disabled={isSavingPassword}
+                        onChange={(event) => setConfirmPassword(event.currentTarget.value)}
+                        className="mt-1 h-8 w-full rounded-md border border-[#9dbdcc] bg-white/90 px-2.5 text-xs font-normal text-[#31556a] outline-none shadow-inner transition focus:border-[#4d9fc4] focus:ring-2 focus:ring-[#70b9d8]/25 disabled:opacity-60"
+                      />
+                    </label>
+                    {(passwordSettingsError || passwordSettingsMessage) && (
+                      <p
+                        role={passwordSettingsError ? "alert" : "status"}
+                        className={`rounded-md px-2.5 py-2 text-[11px] ${
+                          passwordSettingsError
+                            ? "bg-red-50 text-red-700"
+                            : "bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {passwordSettingsError || passwordSettingsMessage}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
+                      className="w-full cursor-pointer rounded-md border border-[#3989b1] bg-gradient-to-b from-[#54add2] to-[#2788b4] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:from-[#65b8d9] hover:to-[#217da7] disabled:cursor-default disabled:opacity-50"
+                    >
+                      {isSavingPassword ? "Alterando..." : "Alterar senha"}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
+
+        <div className="flex max-h-[140px] flex-row gap-2">
+          <PictureFrame
+            imageSrc={resolveApiAssetUrl(user?.avatarUrl) || undefined}
+            imageAlt="Minha imagem de perfil"
+            displayName={user?.displayName}
+            frame={user?.profileFrame ?? "status"}
+            status={toContactStatus(status)}
+          />
           <div className="flex min-w-0 flex-1 flex-col justify-between">
             <div className="flex flex-col">
-              <div className="flex flex-row items-center gap-2">
+              <div className="flex flex-row items-center gap-2 pr-9">
                 <span
                   className={`h-3 w-3 rounded-full border border-white shadow-sm ${STATUS_CONFIG[status].color}`}
                 />
 
                 <span
-                  className="text-[20px] font-extrabold select-none"
-                  style={getTextEffectStyle("frias")}
+                  className="select-none text-[20px] font-extrabold text-[#31556a]"
+                  style={user?.nameEffect && user.nameEffect !== "default"
+                    ? getTextEffectStyle(user.nameEffect)
+                    : undefined}
                 >
                   {user?.displayName ?? "Usuário"}
                 </span>
@@ -1187,10 +2022,7 @@ function HomePage() {
                               role="option"
                               aria-selected={isSelected}
                               onClick={() => {
-                                setStatus(
-                                  statusValue as keyof typeof STATUS_CONFIG,
-                                );
-                                setIsStatusMenuOpen(false);
+                                changeStatus(statusValue as UserStatus);
                               }}
                               className={`flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-left text-xs transition-colors ${
                                 isSelected
@@ -1219,25 +2051,40 @@ function HomePage() {
                 </div>
               </div>
 
-              {isEditingPersonalMessage ? (
-                <input
-                  autoFocus
-                  type="text"
-                  aria-label="Mensagem pessoal"
-                  value={personalMessageDraft}
-                  placeholder="Insira uma mensagem pessoal"
-                  onChange={(event) =>
-                    setPersonalMessageDraft(event.currentTarget.value)
-                  }
-                  onBlur={savePersonalMessage}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      event.currentTarget.blur();
-                    }
-                  }}
-                  className="mt-0.5 h-6 w-full rounded-md border border-[#7faec4] bg-white/80 px-2 text-[13px] italic text-[#436b80] outline-none shadow-inner transition focus:border-[#4d9fc4] focus:ring-2 focus:ring-[#70b9d8]/25"
-                />
+              {!shareListeningActivity && (isEditingPersonalMessage ? (
+                <form
+                  onSubmit={(event) => void submitPersonalMessage(savePersonalMessage)(event)}
+                  noValidate
+                  className="w-full"
+                >
+                  <input
+                    autoFocus
+                    type="text"
+                    aria-label="Mensagem pessoal"
+                    placeholder="Insira uma mensagem pessoal"
+                    maxLength={160}
+                    disabled={isSavingPersonalMessage}
+                    aria-invalid={Boolean(
+                      personalMessageErrors.personalMessage || personalMessageErrors.root?.server,
+                    )}
+                    {...registerPersonalMessage("personalMessage")}
+                    onBlur={handleSavePersonalMessage}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    className="mt-0.5 h-6 w-full rounded-md border border-[#7faec4] bg-white/80 px-2 text-[13px] italic text-[#436b80] outline-none shadow-inner transition focus:border-[#4d9fc4] focus:ring-2 focus:ring-[#70b9d8]/25"
+                  />
+                  {(personalMessageErrors.personalMessage?.message ||
+                    personalMessageErrors.root?.server?.message) && (
+                    <p role="alert" className="mt-1 text-xs text-red-700">
+                      {personalMessageErrors.personalMessage?.message ??
+                        personalMessageErrors.root?.server?.message}
+                    </p>
+                  )}
+                </form>
               ) : (
                 <button
                   type="button"
@@ -1247,11 +2094,9 @@ function HomePage() {
                 >
                   {personalMessage || "<Insira uma mensagem pessoal>"}
                 </button>
-              )}
+              ))}
 
-              {ENABLE_LISTENING_ACTIVITY && (
-                <>
-                  {shareListeningActivity && (
+              {ENABLE_LISTENING_ACTIVITY && shareListeningActivity && (
                     <div
                       className={`mt-1 flex max-w-full items-center gap-1.5 px-1 text-[13px] italic ${
                         currentMedia ? "text-[#287da5]" : "text-[#7894a2]"
@@ -1263,7 +2108,35 @@ function HomePage() {
                       }
                     >
                       <span
-                        className="shrink-0 text-[16px] not-italic"
+                        className={`shrink-0 text-[16px] not-italic ${
+                          currentMedia?.source.toLowerCase().includes("asia dream radio")
+                            ? "scale-[0.8889]"
+                            : ""
+                        } ${
+                          currentMedia?.source.toLowerCase().includes("spotify")
+                            ? "scale-[0.9375]"
+                            : ""
+                        } ${
+                          currentMedia?.source.toLowerCase().includes("deezer")
+                            ? "scale-[0.9375]"
+                            : ""
+                        } ${
+                          currentMedia?.source.toLowerCase().includes("amazon")
+                            ? "scale-[0.9375]"
+                            : ""
+                        } ${
+                          currentMedia?.source.toLowerCase().includes("kiss fm")
+                            ? "scale-[0.9444]"
+                            : ""
+                        } ${
+                          currentMedia?.source.toLowerCase().includes("89 a rádio rock")
+                            ? "scale-[0.8333]"
+                            : ""
+                        } ${
+                          currentMedia?.source.toLowerCase().includes("alpha fm")
+                            ? "scale-[0.8333]"
+                            : ""
+                        }`}
                         aria-hidden="false"
                       >
                         {currentMedia ? (
@@ -1278,47 +2151,37 @@ function HomePage() {
                           : "Nenhuma mídia em reprodução"}
                       </span>
                     </div>
-                  )}
-
-                  <label className="flex w-fit cursor-pointer select-none items-center gap-1.5 rounded px-1 py-0.5 text-[11px] text-[#527b90] transition-colors hover:bg-white/50 hover:text-[#315f77]">
-                    <input
-                      type="checkbox"
-                      checked={shareListeningActivity}
-                      onChange={(event) => {
-                        const shouldShare = event.currentTarget.checked;
-                        setShareListeningActivity(shouldShare);
-                        if (!shouldShare) setCurrentMedia(null);
-                      }}
-                      className="h-3.5 w-3.5 accent-[#3295c2]"
-                    />
-                    Mostrar o que estou ouvindo
-                  </label>
-                </>
               )}
             </div>
 
-            <div className="flex flex-row items-center gap-1 text-[#527b90]">
-              <button
-                type="button"
-                title="Adicionar contato"
-                onClick={() => setIsAddingContact((current) => !current)}
-                className="grid h-8 w-8 place-items-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
-              >
-                <MdOutlinePersonAddAlt size={21} />
-              </button>
-              {[<ImMakeGroup key="group" size={15} />, <TbPhoneCall key="call" size={19} />, <AiOutlineVideoCamera key="video" size={19} />].map((icon) => (
+            <div className="flex w-full flex-row items-center justify-between text-[#527b90]">
+              <div className="flex items-center gap-1">
                 <button
-                  key={icon.key}
                   type="button"
+                  title="Adicionar contato"
+                  onClick={() => {
+                    if (isAddingContact) resetAddContact();
+                    else clearAddContactErrors();
+                    setIsAddingContact((current) => !current);
+                  }}
                   className="grid h-8 w-8 place-items-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
                 >
-                  {icon}
+                  <MdOutlinePersonAddAlt size={21} />
                 </button>
-              ))}
+                {[<ImMakeGroup key="group" size={15} />, <TbPhoneCall key="call" size={19} />, <AiOutlineVideoCamera key="video" size={19} />].map((icon) => (
+                  <button
+                    key={icon.key}
+                    type="button"
+                    className="grid h-8 w-8 place-items-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => void handleLogout()}
-                className="ml-auto rounded-md border border-transparent px-2 py-1 text-xs font-semibold transition-colors hover:border-white hover:bg-white/70"
+                className="rounded-md border border-transparent px-2 py-1 text-xs font-semibold transition-colors hover:border-white hover:bg-white/70"
               >
                 Sair
               </button>
@@ -1330,23 +2193,28 @@ function HomePage() {
       {isAddingContact && (
         <form
           onSubmit={handleAddContact}
+          noValidate
           className="rounded-[10px] border border-[#8fb2c3] bg-white/80 px-3 pb-3 shadow-sm"
         >
           <Input
             inputName="E-mail exato do novo contato"
             type="email"
-            value={newContactEmail}
-            onChange={(event) => setNewContactEmail(event.currentTarget.value)}
-            required
             disabled={isAddingContactPending}
+            aria-invalid={Boolean(addContactErrors.email)}
+            {...registerAddContact("email")}
           />
-          {addContactError && (
-            <p role="alert" className="mt-2 text-xs text-red-700">{addContactError}</p>
+          {(addContactErrors.email?.message || addContactErrors.root?.server?.message) && (
+            <p role="alert" className="mt-2 text-xs text-red-700">
+              {addContactErrors.email?.message ?? addContactErrors.root?.server?.message}
+            </p>
           )}
           <div className="mt-2 flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setIsAddingContact(false)}
+              onClick={() => {
+                resetAddContact();
+                setIsAddingContact(false);
+              }}
               className="rounded px-3 py-1 text-xs text-[#52758a] hover:bg-white"
             >
               Cancelar
@@ -1366,7 +2234,7 @@ function HomePage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-row gap-3">
         {/* 2. COLUNA DE CONTATOS (SE ADAPTA AUTOMATICAMENTE) */}
         <section
-          className={`${isMaximized && activeChat ? "w-[380px]" : "flex-1"} flex h-full flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-white/70 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)] transition-all duration-300`}
+          className="flex h-full flex-1 flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-white/70 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)] transition-all duration-300"
         >
           {/* Input de busca mantido no topo */}
           <Input
@@ -1377,10 +2245,10 @@ function HomePage() {
 
           {/* BARRA DE ABAS (TABS) */}
           <div className="border-b border-[#b9d3df]">
-            <div className="relative mx-auto grid w-full max-w-[300px] grid-cols-3">
+            <div className="relative mx-auto grid w-full max-w-[420px] grid-cols-4">
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute -bottom-px left-0 h-0.5 w-1/3 transition-transform duration-300 ease-out"
+                className="pointer-events-none absolute -bottom-px left-0 h-0.5 w-1/4 transition-transform duration-300 ease-out"
                 style={{
                   transform: `translateX(${tabsConfig.findIndex((tab) => tab.id === activeTab) * 100}%)`,
                 }}
@@ -1393,6 +2261,7 @@ function HomePage() {
                 return (
                   <button
                     key={tab.id}
+                    type="button"
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors duration-300 ${
                       isSelected
@@ -1431,27 +2300,19 @@ function HomePage() {
                     onDoubleClick={() => handleContactClick(contato)} // 👈 GATILHO DE JANELA (ABAS GERAIS)
                     className="flex cursor-pointer select-none flex-row items-center gap-3 rounded-[8px] border border-transparent p-1.5 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
                   >
-                    {/* Mini Avatar Falso estilo MSN */}
-                    <div className="relative flex h-8 w-8 items-center justify-center rounded-md border border-[#9dbdcc] bg-gradient-to-b from-[#edf8fc] to-[#b9dce9] shadow-sm">
-                      <span className="text-xs font-bold text-[#527b90]">
-                        {contato.name[0]}
-                      </span>
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${statusColors[contato.status as keyof typeof statusColors]}`}
-                      />
-                    </div>
+                    <ContactStatusFrame contact={contato} />
                     {/* Informações do Contato */}
-                    <div className="flex flex-col min-w-0">
+                    <div
+                      className={`flex h-[38px] min-w-0 flex-1 flex-col ${
+                        contato.msg ? "justify-between" : "justify-center"
+                      }`}
+                    >
                       <span
-                        className={`text-sm font-medium ${contato.status === "offline" ? "text-[#91a5af]" : "text-[#31556a]"}`}
+                        className={`relative -top-px text-sm font-medium leading-[18px] ${contato.status === "offline" ? "text-[#91a5af]" : "text-[#31556a]"}`}
                       >
                         {contato.name}
                       </span>
-                      {contato.msg && (
-                        <span className="truncate text-xs italic text-[#7894a2]">
-                          {contato.msg}
-                        </span>
-                      )}
+                      <ContactActivity contact={contato} />
                     </div>
                   </div>
                 ))
@@ -1466,22 +2327,24 @@ function HomePage() {
                         {grupoName} ({contatosDoGrupo.length})
                       </h4>
                       {contatosDoGrupo.map((contato) => (
-                        <div
-                          key={contato.id}
-                          onDoubleClick={() => handleContactClick(contato)} // 👈 GATILHO DE JANELA (ABAS GRUPOS)
+                        // O callback só lê statusRef quando o evento ocorre; o analisador o segue como se fosse render.
+                        // eslint-disable-next-line react-hooks/refs
+                        <div key={contato.id} onDoubleClick={() => handleContactClick(contato)}
                           className="flex cursor-pointer select-none flex-row items-center gap-3 rounded-[8px] border border-transparent p-1.5 pl-4 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
                         >
-                          <div className="relative flex h-7 w-7 items-center justify-center rounded-md border border-[#9dbdcc] bg-gradient-to-b from-[#edf8fc] to-[#b9dce9]">
-                            <span className="text-xs font-bold text-[#527b90]">
-                              {contato.name[0]}
-                            </span>
+                          <ContactStatusFrame contact={contato} />
+                          <div
+                            className={`flex h-[38px] min-w-0 flex-1 flex-col ${
+                              contato.msg ? "justify-between" : "justify-center"
+                            }`}
+                          >
                             <span
-                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white ${statusColors[contato.status as keyof typeof statusColors]}`}
-                            />
+                              className={`relative -top-px text-sm font-medium leading-[18px] ${contato.status === "offline" ? "text-[#91a5af]" : "text-[#31556a]"}`}
+                            >
+                              {contato.name}
+                            </span>
+                            <ContactActivity contact={contato} />
                           </div>
-                          <span className="text-sm text-[#31556a]">
-                            {contato.name}
-                          </span>
                         </div>
                       ))}
                     </div>
@@ -1490,67 +2353,9 @@ function HomePage() {
           </div>
         </section>
 
-        {/* 3. COLUNA DIREITA: JANELA DE CONVERSA EMBUTIDA (SÓ EXIBE SE O APP ESTIVER MAXIMIZADO) */}
-        {isMaximized && activeChat && (
-          <section className="flex h-full flex-1 animate-fadeIn flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-white/70 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)] transition-all duration-300">
-            <div className="flex items-center justify-between border-b border-[#b9d3df] pb-2">
-              <div className="flex flex-col">
-                <h3 className="text-base font-semibold text-[#31556a]">
-                  {activeChat.name}
-                </h3>
-                <span className="text-xs italic text-[#7894a2]">
-                  {activeChat.msg || "Sem sub-mensagem"}
-                </span>
-              </div>
-              <button
-                onClick={() => setActiveChat(null)}
-                className="rounded-md border border-[#9dbdcc] bg-gradient-to-b from-white to-[#dceef6] px-2.5 py-1 text-xs font-medium text-[#52758a] transition-colors hover:border-[#70afd0] hover:text-[#286c8d]"
-              >
-                Fechar Conversa
-              </button>
-            </div>
-
-            {/* Histórico das Mensagens */}
-            <div className="my-1 min-h-0 flex-1 overflow-y-auto rounded-[9px] border border-[#9dbdcc] bg-gradient-to-b from-white/95 to-[#f3f9fc]/95 p-3 text-sm shadow-inner">
-              {getChatMessages(String(activeChat.id)).length === 0 ? (
-                <p className="mb-2 text-center text-xs italic text-[#7894a2]">
-                  Início da conversa com {activeChat.name}
-                </p>
-              ) : (
-                getChatMessages(String(activeChat.id)).map((chatMessage) => (
-                  <div
-                    key={chatMessage.id}
-                    className={`mb-3 flex flex-col ${
-                      chatMessage.author === "me" ? "items-end" : "items-start"
-                    }`}
-                  >
-                    <span className="mb-1 text-xs font-medium text-[#5f7f90]">
-                      {chatMessage.author === "me" ? "Você" : activeChat.name}
-                    </span>
-                    <p className="max-w-[78%] rounded-[9px] border border-[#c4dbe5] bg-white px-3 py-2 text-[#375567] shadow-[0_1px_3px_rgba(42,83,104,0.1)]">
-                      {chatMessage.text}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Input de Envio de Mensagem */}
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Envio temporariamente bloqueado até a ativação das chaves E2EE neste dispositivo.
-            </p>
-            <input
-              type="text"
-              disabled
-              placeholder={`E2EE pendente para ${activeChat.name}`}
-              className="cursor-not-allowed rounded-[8px] border border-[#9dbdcc] bg-zinc-100/85 p-2 text-sm text-[#304f60] opacity-70 shadow-inner outline-none placeholder:text-[#829aa6]"
-            />
-          </section>
-        )}
       </div>
 
-      {/* 4. SEÇÃO INFERIOR DE ANÚNCIOS (OCULTA NO MODO CHAT INTEGRADO SE NÃO COUBER) */}
-      {(!isMaximized || !activeChat) && (
+      {/* 4. SEÇÃO INFERIOR DE ANÚNCIOS */}
         <section className="flex h-[180px] flex-col rounded-[12px] border border-[#8fb2c3] bg-white/65 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)]">
           <div className="flex h-full w-full flex-col">
             <h3 className="mb-1 select-none text-xs font-medium uppercase tracking-[0.1em] text-[#91aeba]">
@@ -1566,9 +2371,17 @@ function HomePage() {
             </div>
           </div>
         </section>
-      )}
         </div>
       </div>
+
+      {browserNotification && (
+        <div className="fixed bottom-4 right-4 z-[100]">
+          <MessengerNotification
+            notification={browserNotification}
+            onClose={() => setBrowserNotification(null)}
+          />
+        </div>
+      )}
     </main>
   );
 }

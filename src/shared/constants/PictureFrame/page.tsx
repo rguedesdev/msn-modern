@@ -1,50 +1,47 @@
 import type { ReactNode } from "react";
-
-// Imagens
-import ProfilePicture from "../../../assets/images/kon.jpg";
-
-const PICTURE_FRAME_COLORS = {
-  quentes: "linear-gradient(90deg, #ff4500, #ff007f, #ffaa00, #ff4500)",
-  frias: "linear-gradient(90deg, #00f0ff, #0072ff, #7f00ff, #00f0ff)",
-  nitro: "linear-gradient(90deg, #5865F2, #EB459F, #5865F2)",
-  cyberpunk: "linear-gradient(90deg, #ff0055, #00ffcc, #9900ff, #ff0055)",
-  matrix: "linear-gradient(90deg, #00ff7f, #00aa00, #00ffff, #00ff7f)",
-  gold: "linear-gradient(90deg, #ffe066, #f5b041, #f9e79f, #ffe066)",
-  mono: "linear-gradient(90deg, #ffffff, #333333, #ffffff)",
-  synthwave: "linear-gradient(90deg, #0018ff, #bd00ff, #ff00b8, #0018ff)",
-  vaporwave: "linear-gradient(90deg, #ff9a9e, #fecfef, #a1c4fd, #ff9a9e)",
-  vampire: "linear-gradient(90deg, #ff0000, #1a0000, #ff0000)",
-  aurora: "linear-gradient(90deg, #0575e6, #00f260, #7f00ff, #0575e6)",
-  diamond: "linear-gradient(90deg, #e0f7fa, #80deea, #b2ebf2, #e0f7fa)",
-  rgb: "linear-gradient(90deg, #ff0000, #00ff00, #0000ff, #ff00ff, #ff0000)",
-  dracula: "linear-gradient(90deg, #bd93f9, #ff79c6, #8be9fd, #bd93f9)",
-} as const;
-
-type PictureFrameKey = keyof typeof PICTURE_FRAME_COLORS;
+import {
+  CONTACT_STATUS_FRAMES,
+  type ContactStatus,
+} from "../ContactStatusFrame/page";
+import {
+  PROFILE_STYLE_BACKGROUNDS,
+  type ProfileFrame,
+} from "../ProfileStyle/page";
 
 interface PictureFrameProps {
-  frame?: PictureFrameKey;
+  frame?: ProfileFrame;
+  status?: ContactStatus;
   imageSrc?: string;
   imageAlt?: string;
+  displayName?: string;
   imageSize?: number;
   fallback?: ReactNode;
 }
 
 function PictureFrame({
-  frame = "frias",
-  imageSrc = ProfilePicture,
-  imageAlt = "Profile Picture",
+  frame = "status",
+  status = "online",
+  imageSrc,
+  imageAlt = "Foto de perfil",
+  displayName = "Usuário",
   imageSize = 100,
   fallback,
 }: PictureFrameProps) {
+  const initial = displayName.trim().charAt(0).toLocaleUpperCase("pt-BR") || "U";
+  const isCustomFrame = frame !== "status";
+  const frameBackground = frame === "status"
+    ? CONTACT_STATUS_FRAMES[status].background
+    : PROFILE_STYLE_BACKGROUNDS[frame];
 
   return (
     <div className="relative shrink-0 self-start p-[6px]">
       <div
-        className="absolute inset-0 rounded-xl animate-[gradientMove_4s_linear_infinite]"
+        className={`absolute inset-0 rounded-xl ${
+          isCustomFrame ? "animate-[gradientMove_4s_linear_infinite]" : ""
+        }`}
         style={{
-          background: PICTURE_FRAME_COLORS[frame],
-          backgroundSize: "300% 100%",
+          background: frameBackground,
+          backgroundSize: isCustomFrame ? "300% 100%" : "100% 100%",
           mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
           maskComposite: "exclude",
           WebkitMask:
@@ -53,14 +50,27 @@ function PictureFrame({
           padding: "8px" /* Espessura da borda */,
         }}
       />
-      {fallback ?? (
+      {fallback ?? (imageSrc ? (
         <img
           className="relative z-10 block rounded-lg object-cover"
           style={{ height: imageSize, width: imageSize }}
           src={imageSrc}
           alt={imageAlt}
         />
-      )}
+      ) : (
+        <div
+          role="img"
+          aria-label={imageAlt}
+          className="relative z-10 flex items-center justify-center rounded-lg bg-gradient-to-br from-[#e7f6f2] via-[#ccebe5] to-[#a9d3e4] font-bold text-[#438d73] shadow-inner"
+          style={{
+            height: imageSize,
+            width: imageSize,
+            fontSize: Math.max(20, Math.round(imageSize * 0.42)),
+          }}
+        >
+          {initial}
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { apiRequest, type ApiUser } from "./client";
 
-export interface ApiConversationParticipant extends Omit<ApiUser, "id"> {
+export interface ApiConversationParticipant extends Pick<
+  ApiUser,
+  "email" | "displayName" | "personalMessage" | "avatarUrl" | "profileFrame" | "nameEffect"
+> {
   _id: string;
 }
 

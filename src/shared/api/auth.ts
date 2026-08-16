@@ -34,6 +34,47 @@ export async function getMe(): Promise<ApiUser> {
   return response.user;
 }
 
+export async function updatePersonalMessage(personalMessage: string): Promise<ApiUser> {
+  return updateProfile({ personalMessage });
+}
+
+export async function updateProfile(
+  profile: Partial<Pick<
+    ApiUser,
+    "displayName" | "personalMessage" | "profileFrame" | "nameEffect"
+  >>,
+): Promise<ApiUser> {
+  const response = await apiRequest<{ user: ApiUser }>("/me/profile", {
+    method: "PATCH",
+    body: JSON.stringify(profile),
+  });
+  return response.user;
+}
+
+export async function uploadAvatar(file: File): Promise<string> {
+  const body = new FormData();
+  body.append("avatar", file);
+  const response = await apiRequest<{ avatarUrl: string }>("/me/avatar", {
+    method: "POST",
+    body,
+  });
+  return response.avatarUrl;
+}
+
+export async function removeAvatar(): Promise<void> {
+  await apiRequest<void>("/me/avatar", { method: "DELETE" });
+}
+
+export async function updatePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await apiRequest<void>("/me/password", {
+    method: "PATCH",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
 export async function logout(): Promise<void> {
   const session = getSession();
   clearSession();

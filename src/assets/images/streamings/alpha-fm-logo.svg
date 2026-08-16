@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 225 225" role="img" aria-labelledby="title">
+  <title id="title">Alpha FM</title>
+  <rect width="225" height="225" fill="#3038b8" />
+  <circle cx="112" cy="112" r="95" fill="#fff" />
+  <rect x="171" y="39" width="36" height="147" fill="#fff" />
+  <circle cx="112" cy="112" r="52" fill="#3038b8" />
+</svg>

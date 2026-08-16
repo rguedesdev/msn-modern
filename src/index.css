@@ -35,6 +35,48 @@
   background: transparent;
 }
 
+/* Checkbox de configurações: mesma construção visual usada no Orkkut. */
+.msn-settings-checkbox {
+  appearance: none;
+  position: relative;
+  width: 16px;
+  height: 16px;
+  background-color: #fff;
+  border: 2px solid #9bbdcb;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.msn-settings-checkbox::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0, 43% 62%);
+  transform: translate(-50%, -50%) scale(0);
+  transition: 0.125s transform ease-in;
+  box-shadow: inset 16px 16px #fff;
+}
+
+.msn-settings-checkbox:checked {
+  background-color: #3295c2;
+  border-color: #3295c2;
+}
+
+.msn-settings-checkbox:checked::before {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.msn-settings-checkbox:focus {
+  border-color: #3295c2;
+}
+
+.msn-settings-checkbox:disabled {
+  opacity: 0.25;
+}
+
 /* body {
   background-color: rgb(220, 231, 240);
 } */

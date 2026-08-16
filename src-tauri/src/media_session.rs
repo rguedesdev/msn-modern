@@ -45,27 +45,58 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         service_name: &str,
         identity: &str,
         media_url: &str,
+        media_title: &str,
+        media_artist: &str,
     ) -> Option<String> {
-        let searchable_source = format!("{service_name} {identity} {media_url}").to_lowercase();
+        let searchable_source =
+            format!("{service_name} {identity} {media_url} {media_title} {media_artist}")
+                .to_lowercase();
         let player_identity = format!("{service_name} {identity}").to_lowercase();
 
         if searchable_source.contains("asiadreamradio.torontocast.stream")
             || searchable_source.contains("asiadreamradio.com")
+            || searchable_source.contains("asia dream radio")
+            || searchable_source.contains("asiadreamradio")
         {
             let asia_dream_channels = [
-                ("japanhitsplayer", "Asia DREAM Radio — Japan Hits"),
-                ("jpowerplayer", "Asia DREAM Radio — J-Pop Powerplay"),
-                ("jkawaiiplayer", "Asia DREAM Radio — J-Pop Powerplay Kawaii"),
-                ("natsukashiiplayer", "Asia DREAM Radio — J-Sakura"),
-                ("jrockplayer", "Asia DREAM Radio — J-Rock Powerplay"),
-                ("jclubplayer", "Asia DREAM Radio — J-Club Powerplay HipHop"),
-                ("jazzbandplayer", "Asia DREAM Radio — Jazz Sakura"),
+                (
+                    ["jkawaiiplayer", "j-pop powerplay kawaii"],
+                    "Asia DREAM Radio — J-Pop Powerplay Kawaii",
+                ),
+                (
+                    ["jpowerplayer", "j-pop powerplay"],
+                    "Asia DREAM Radio — J-Pop Powerplay",
+                ),
+                (
+                    ["jclubplayer", "j-club powerplay hiphop"],
+                    "Asia DREAM Radio — J-Club Powerplay HipHop",
+                ),
+                (
+                    ["jrockplayer", "j-rock powerplay"],
+                    "Asia DREAM Radio — J-Rock Powerplay",
+                ),
+                (
+                    ["jazzbandplayer", "jazz sakura"],
+                    "Asia DREAM Radio — Jazz Sakura",
+                ),
+                (
+                    ["natsukashiiplayer", "j-sakura"],
+                    "Asia DREAM Radio — J-Sakura",
+                ),
+                (
+                    ["japanhitsplayer", "japan hits"],
+                    "Asia DREAM Radio — Japan Hits",
+                ),
             ];
 
             return Some(
                 asia_dream_channels
                     .iter()
-                    .find(|(identifier, _)| searchable_source.contains(identifier))
+                    .find(|(identifiers, _)| {
+                        identifiers
+                            .iter()
+                            .any(|identifier| searchable_source.contains(identifier))
+                    })
                     .map(|(_, label)| *label)
                     .unwrap_or("Asia DREAM Radio")
                     .to_owned(),
@@ -81,7 +112,15 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             ("kissfm.com.br", "Kiss FM"),
             ("kissfm", "Kiss FM"),
             ("kiss fm", "Kiss FM"),
+            ("aovivo.alphafm.com.br", "Alpha FM"),
+            ("alphafm.com.br", "Alpha FM"),
+            ("alphafmsp", "Alpha FM"),
+            ("alphafm1021", "Alpha FM"),
+            ("alpha fm", "Alpha FM"),
             ("radiojhero.com", "Rádio J-Hero"),
+            ("rádio j-hero", "Rádio J-Hero"),
+            ("radio j-hero", "Rádio J-Hero"),
+            ("radiojhero", "Rádio J-Hero"),
             ("radiorock.com.br", "89 A Rádio Rock"),
             ("89fm.com.br", "89 A Rádio Rock"),
             ("radio_89fm", "89 A Rádio Rock"),
@@ -111,6 +150,29 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
         if let Some((_, label)) = streaming_services
             .iter()
             .find(|(identifier, _)| searchable_source.contains(identifier))
+        {
+            return Some((*label).to_owned());
+        }
+
+        // Alguns navegadores no Linux publicam pelo MPRIS somente a faixa e a
+        // identidade do navegador, sem a URL da página. O frontend compara a
+        // faixa com as APIs das rádios para concluir a identificação.
+        let browsers = [
+            ("chrome", "Google Chrome"),
+            ("chromium", "Chromium"),
+            ("firefox", "Mozilla Firefox"),
+            ("brave", "Brave"),
+            ("vivaldi", "Vivaldi"),
+            ("opera", "Opera"),
+            ("librewolf", "LibreWolf"),
+            ("waterfox", "Waterfox"),
+            ("floorp", "Floorp"),
+            ("zen", "Zen Browser"),
+        ];
+
+        if let Some((_, label)) = browsers
+            .iter()
+            .find(|(identifier, _)| player_identity.contains(identifier))
         {
             return Some((*label).to_owned());
         }
@@ -148,6 +210,117 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             .iter()
             .any(|player| player_identity.contains(player))
             .then(|| identity.to_owned())
+    }
+
+    fn read_playing_browser_radio() -> Option<MediaInfo> {
+        use std::process::Command;
+
+        fn property_value(block: &str, property: &str) -> Option<String> {
+            let prefix = format!("{property} = \"");
+            block.lines().find_map(|line| {
+                line.trim()
+                    .strip_prefix(&prefix)
+                    .and_then(|value| value.strip_suffix('"'))
+                    .map(str::to_owned)
+            })
+        }
+
+        let output = Command::new("pactl")
+            .args(["list", "sink-inputs"])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let sink_inputs = String::from_utf8_lossy(&output.stdout);
+        for block in sink_inputs.split("Sink Input #") {
+            if !block.contains("pulse.corked = \"false\"") {
+                continue;
+            }
+
+            let media_name = property_value(block, "media.name").unwrap_or_default();
+            let normalized_name = media_name.to_lowercase();
+            let asia_dream_channels = [
+                (
+                    ["j-pop powerplay kawaii player", "jkawaiiplayer"],
+                    "Asia DREAM Radio — J-Pop Powerplay Kawaii",
+                ),
+                (
+                    ["j-pop powerplay player", "jpowerplayer"],
+                    "Asia DREAM Radio — J-Pop Powerplay",
+                ),
+                (
+                    ["j-club powerplay hiphop player", "jclubplayer"],
+                    "Asia DREAM Radio — J-Club Powerplay HipHop",
+                ),
+                (
+                    ["j-rock powerplay player", "jrockplayer"],
+                    "Asia DREAM Radio — J-Rock Powerplay",
+                ),
+                (
+                    ["jazz sakura player", "jazzbandplayer"],
+                    "Asia DREAM Radio — Jazz Sakura",
+                ),
+                (
+                    ["j-sakura player", "natsukashiiplayer"],
+                    "Asia DREAM Radio — J-Sakura",
+                ),
+                (
+                    ["japan hits player", "japanhitsplayer"],
+                    "Asia DREAM Radio — Japan Hits",
+                ),
+            ];
+            let asia_dream_channel = asia_dream_channels.iter().find(|(identifiers, _)| {
+                identifiers
+                    .iter()
+                    .any(|identifier| normalized_name.contains(identifier))
+            });
+            let source = if let Some((_, label)) = asia_dream_channel {
+                (*label).to_owned()
+            } else if normalized_name.contains("alpha fm") || normalized_name.contains("alphafm") {
+                "Alpha FM".to_owned()
+            } else if normalized_name.contains("rádio j-hero")
+                || normalized_name.contains("radio j-hero")
+                || normalized_name.contains("radiojhero")
+            {
+                "Rádio J-Hero".to_owned()
+            } else if normalized_name.contains("asia dream radio")
+                || normalized_name.contains("asiadreamradio")
+            {
+                let channels = [
+                    (
+                        "j-pop powerplay kawaii",
+                        "Asia DREAM Radio — J-Pop Powerplay Kawaii",
+                    ),
+                    ("j-pop powerplay", "Asia DREAM Radio — J-Pop Powerplay"),
+                    (
+                        "j-club powerplay hiphop",
+                        "Asia DREAM Radio — J-Club Powerplay HipHop",
+                    ),
+                    ("j-rock powerplay", "Asia DREAM Radio — J-Rock Powerplay"),
+                    ("jazz sakura", "Asia DREAM Radio — Jazz Sakura"),
+                    ("j-sakura", "Asia DREAM Radio — J-Sakura"),
+                    ("japan hits", "Asia DREAM Radio — Japan Hits"),
+                ];
+                channels
+                    .iter()
+                    .find(|(identifier, _)| normalized_name.contains(identifier))
+                    .map(|(_, label)| *label)
+                    .unwrap_or("Asia DREAM Radio")
+                    .to_owned()
+            } else {
+                continue;
+            };
+
+            return Some(MediaInfo {
+                title: media_name,
+                artist: "Artista desconhecido".to_owned(),
+                source,
+            });
+        }
+
+        None
     }
 
     let connection = Connection::new_session()
@@ -193,18 +366,23 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             .get(ROOT_INTERFACE, "Identity")
             .unwrap_or_else(|_| service_name.to_owned());
         let media_url = metadata_text(&metadata, "xesam:url").unwrap_or_default();
-        let Some(source) = identify_music_source(service_name, &identity, &media_url) else {
+        let artist = metadata_artists(&metadata);
+        let Some(source) =
+            identify_music_source(service_name, &identity, &media_url, &title, &artist)
+        else {
             continue;
         };
 
         return Ok(Some(MediaInfo {
             title,
-            artist: metadata_artists(&metadata),
+            artist,
             source,
         }));
     }
 
-    Ok(None)
+    // Web rádios que usam um elemento de áudio simples podem aparecer no
+    // PipeWire/PulseAudio sem criar uma sessão MPRIS no navegador.
+    Ok(read_playing_browser_radio())
 }
 
 #[cfg(target_os = "windows")]
@@ -441,6 +619,8 @@ fn read_current_media() -> Result<Option<MediaInfo>, String> {
             ("deezer", "Deezer"),
             ("kissfm", "Kiss FM"),
             ("kiss fm", "Kiss FM"),
+            ("alpha fm", "Alpha FM"),
+            ("alphafm", "Alpha FM"),
             ("rádio j-hero", "Rádio J-Hero"),
             ("radio j-hero", "Rádio J-Hero"),
             ("radiojhero", "Rádio J-Hero"),

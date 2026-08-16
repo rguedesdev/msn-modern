@@ -41,9 +41,38 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/conversations", { preHandler: app.authenticate }, async (request) => {
     const conversations = await ConversationModel.find({ participants: request.user.sub })
       .sort({ updatedAt: -1 })
-      .populate("participants", "displayName email")
+      .populate<{
+        participants: Array<{
+          _id: Types.ObjectId;
+          displayName: string;
+          email: string;
+          personalMessage?: string;
+          avatarFileId?: Types.ObjectId;
+          profileFrame?: string;
+          nameEffect?: string;
+        }>;
+      }>(
+        "participants",
+        "displayName email personalMessage avatarFileId profileFrame nameEffect",
+      )
       .lean();
-    return { conversations };
+    return {
+      conversations: conversations.map((conversation) => ({
+        ...conversation,
+        participants: conversation.participants.map((participant) => {
+          const { avatarFileId, ...publicParticipant } = participant;
+          const participantId = participant._id.toString();
+          return {
+            ...publicParticipant,
+            avatarUrl: avatarFileId
+              ? `/users/${participantId}/avatar?v=${avatarFileId.toString()}&policy=2`
+              : "",
+            profileFrame: participant.profileFrame ?? "status",
+            nameEffect: participant.nameEffect ?? "default",
+          };
+        }),
+      })),
+    };
   });
 
   app.get(

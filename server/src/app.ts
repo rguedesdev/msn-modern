@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import jwt from "@fastify/jwt";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
 import mongoose from "mongoose";
@@ -9,6 +10,7 @@ import type { Config } from "./config.js";
 import { HttpError } from "./http.js";
 import { configureRealtime } from "./realtime.js";
 import { authRoutes } from "./routes/auth.js";
+import { avatarRoutes } from "./routes/avatars.js";
 import { conversationRoutes } from "./routes/conversations.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { e2eeRoutes } from "./routes/e2ee.js";
@@ -34,6 +36,9 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
   });
   await app.register(rateLimit, { max: 120, timeWindow: "1 minute" });
   await app.register(jwt, { secret: config.JWT_SECRET });
+  await app.register(multipart, {
+    limits: { files: 1, fields: 0, parts: 1, fileSize: 5 * 1024 * 1024 },
+  });
 
   app.decorate("authenticate", async (request) => {
     await request.jwtVerify();
@@ -53,6 +58,7 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
   });
 
   await authRoutes(app, config);
+  await avatarRoutes(app);
   await userRoutes(app);
   await deviceRoutes(app);
   await e2eeRoutes(app);

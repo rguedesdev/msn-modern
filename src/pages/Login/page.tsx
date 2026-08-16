@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isTauri } from "@tauri-apps/api/core";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 
 // Componentes
 import { Input } from "../../shared/components/Input";
@@ -10,7 +12,10 @@ import { LoadingScreen } from "../../shared/components/LoadingScreen";
 import { Checkbox } from "../../shared/components/Checkbox";
 
 // Constants
-import { STATUS_CONFIG } from "../../shared/constants/StatusConfig/page";
+import {
+  LOGIN_STATUS_STORAGE_KEY,
+  STATUS_CONFIG,
+} from "../../shared/constants/StatusConfig/page";
 
 // Icones
 import {
@@ -23,17 +28,17 @@ import {
 // Imagens
 import MSNLogo2 from "../../assets/images/msn2.jpg";
 import { useAuth } from "../../shared/auth/AuthContext";
+import {
+  authFormSchema,
+  type AuthFormData,
+  type AuthFormInput,
+} from "../../shared/validation/forms";
 // import MSNLogo3 from "./assets/msn3.jpg";
 
 function LoginPage() {
   const { user, signIn, signUp } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
-  const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] =
     useState<keyof typeof STATUS_CONFIG>("online");
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
@@ -43,6 +48,24 @@ function LoginPage() {
   );
 
   const navigate = useNavigate();
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    clearErrors,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<AuthFormInput, unknown, AuthFormData>({
+    resolver: zodResolver(authFormSchema),
+    defaultValues: {
+      isRegistering: false,
+      email: "",
+      displayName: "",
+      password: "",
+    },
+    mode: "onSubmit",
+    reValidateMode: "onChange",
+  });
 
   useEffect(() => {
     const previousHtmlBackground = document.documentElement.style.background;
@@ -73,23 +96,21 @@ function LoginPage() {
     if (user) navigate("/home", { replace: true });
   }, [navigate, user]);
 
-  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAuthError("");
-    setIsSubmitting(true);
+  const handleAuthSubmit = handleSubmit(async (data) => {
     try {
-      if (isRegistering) {
-        await signUp(email, displayName, password);
+      if (data.isRegistering) {
+        await signUp(data.email, data.displayName, data.password);
       } else {
-        await signIn(email, password);
+        await signIn(data.email, data.password);
       }
+      sessionStorage.setItem(LOGIN_STATUS_STORAGE_KEY, status);
       navigate("/home", { replace: true });
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Não foi possível autenticar");
-    } finally {
-      setIsSubmitting(false);
+      setError("root.server", {
+        message: error instanceof Error ? error.message : "Não foi possível autenticar",
+      });
     }
-  }
+  });
 
   return (
     <>
@@ -244,43 +265,52 @@ function LoginPage() {
                   </div>
                 </div>
 
-                <form className="contents" onSubmit={handleAuthSubmit}>
+                <form className="contents" onSubmit={handleAuthSubmit} noValidate>
                   <div className="mt-4 w-full">
                     {isRegistering && (
-                      <Input
-                        inputName="Nome de exibição"
-                        name="displayName"
-                        value={displayName}
-                        onChange={(event) => setDisplayName(event.currentTarget.value)}
-                        autoComplete="name"
-                        minLength={1}
-                        maxLength={80}
-                        required
-                        disabled={isSubmitting}
-                      />
+                      <>
+                        <Input
+                          inputName="Nome de exibição"
+                          autoComplete="name"
+                          maxLength={80}
+                          disabled={isSubmitting}
+                          aria-invalid={Boolean(errors.displayName)}
+                          {...register("displayName")}
+                        />
+                        {errors.displayName && (
+                          <p role="alert" className="mt-1 text-xs text-red-700">
+                            {errors.displayName.message}
+                          </p>
+                        )}
+                      </>
                     )}
                     <Input
                       inputName="Email"
                       type="email"
-                      name="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.currentTarget.value)}
                       autoComplete="email"
-                      required
                       disabled={isSubmitting}
+                      aria-invalid={Boolean(errors.email)}
+                      {...register("email")}
                     />
+                    {errors.email && (
+                      <p role="alert" className="mt-1 text-xs text-red-700">
+                        {errors.email.message}
+                      </p>
+                    )}
                     <Input
                       inputName="Senha"
                       type="password"
-                      name="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.currentTarget.value)}
                       autoComplete={isRegistering ? "new-password" : "current-password"}
-                      minLength={10}
                       maxLength={128}
-                      required
                       disabled={isSubmitting}
+                      aria-invalid={Boolean(errors.password)}
+                      {...register("password")}
                     />
+                    {errors.password && (
+                      <p role="alert" className="mt-1 text-xs text-red-700">
+                        {errors.password.message}
+                      </p>
+                    )}
                   </div>
 
                   {!isRegistering && (
@@ -289,9 +319,9 @@ function LoginPage() {
                     </div>
                   )}
 
-                  {authError && (
+                  {errors.root?.server?.message && (
                     <p role="alert" className="mt-3 w-full rounded-md border border-red-200 bg-red-50/80 px-3 py-2 text-xs text-red-700">
-                      {authError}
+                      {errors.root.server.message}
                     </p>
                   )}
 
@@ -308,8 +338,10 @@ function LoginPage() {
                   <Footer
                     isRegistering={isRegistering}
                     onRegister={() => {
-                      setIsRegistering((current) => !current);
-                      setAuthError("");
+                      const nextIsRegistering = !isRegistering;
+                      setIsRegistering(nextIsRegistering);
+                      setValue("isRegistering", nextIsRegistering);
+                      clearErrors();
                     }}
                   />
                 </div>

@@ -16,6 +16,14 @@ interface AuthContextValue {
   isLoading: boolean;
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, displayName: string, password: string): Promise<void>;
+  updateProfile(profile: Partial<Pick<
+    ApiUser,
+    "displayName" | "personalMessage" | "profileFrame" | "nameEffect"
+  >>): Promise<void>;
+  updateAvatar(file: File): Promise<void>;
+  removeAvatar(): Promise<void>;
+  updatePersonalMessage(personalMessage: string): Promise<void>;
+  updatePassword(currentPassword: string, newPassword: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -73,14 +81,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const updateProfile = useCallback(async (
+    profile: Partial<Pick<
+      ApiUser,
+      "displayName" | "personalMessage" | "profileFrame" | "nameEffect"
+    >>,
+  ) => {
+    const updatedUser = await authApi.updateProfile(profile);
+    const session = getSession();
+    if (session) saveSession({ ...session, user: updatedUser });
+    setUser(updatedUser);
+  }, []);
+
+  const updateAvatar = useCallback(async (file: File) => {
+    const avatarUrl = await authApi.uploadAvatar(file);
+    const session = getSession();
+    if (!session) return;
+    const updatedUser = { ...session.user, avatarUrl };
+    saveSession({ ...session, user: updatedUser });
+    setUser(updatedUser);
+  }, []);
+
+  const removeAvatar = useCallback(async () => {
+    await authApi.removeAvatar();
+    const session = getSession();
+    if (!session) return;
+    const updatedUser = { ...session.user, avatarUrl: "" };
+    saveSession({ ...session, user: updatedUser });
+    setUser(updatedUser);
+  }, []);
+
+  const updatePersonalMessage = useCallback(async (personalMessage: string) => {
+    await updateProfile({ personalMessage });
+  }, [updateProfile]);
+
+  const updatePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    await authApi.updatePassword(currentPassword, newPassword);
+  }, []);
+
   const signOut = useCallback(async () => {
     await authApi.logout();
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, signIn, signUp, signOut }),
-    [isLoading, signIn, signOut, signUp, user],
+    () => ({
+      user,
+      isLoading,
+      signIn,
+      signUp,
+      updateProfile,
+      updateAvatar,
+      removeAvatar,
+      updatePersonalMessage,
+      updatePassword,
+      signOut,
+    }),
+    [isLoading, removeAvatar, signIn, signOut, signUp, updateAvatar, updatePassword, updatePersonalMessage, updateProfile, user],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
