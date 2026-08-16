@@ -1,9 +1,11 @@
 name: Build Windows
+run-name: Build Windows • ${{ github.ref_name }} • ${{ github.sha }}
 
 on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - develop
 
 jobs:
@@ -33,11 +35,13 @@ jobs:
 
       - name: Build Windows installer
         run: npm run tauri -- build --bundles nsis
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'http://192.168.15.15:3333' }}
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v6
         with:
-          name: msn-modern-windows
+          name: msn-modern-windows-${{ github.sha }}
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/app.exe
