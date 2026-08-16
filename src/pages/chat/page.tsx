@@ -19,8 +19,13 @@ import { PictureFrame } from "../../shared/constants/PictureFrame/page";
 import {
   appendChatMessage,
   getChatMessages,
+  saveChatMessages,
   type ChatMessage,
 } from "../../shared/utils/chatStorage";
+import { useAuth } from "../../shared/auth/AuthContext";
+import { decryptEnvelope, encryptForDevice, listPublicKeys, registerCurrentDevice } from "../../shared/api/e2ee";
+import { listEncryptedMessages, sendEncryptedMessage, type ApiEncryptedMessage } from "../../shared/api/messages";
+import { connectRealtime } from "../../shared/api/realtime";
 
 // Icons
 import {
@@ -90,7 +95,6 @@ import OnionHeadSoccerRageIcon from "../../assets/images/emoticons/onion-head/so
 import OnionHeadSuperIcon from "../../assets/images/emoticons/onion-head/superonionplz.gif";
 import OnionHeadWhipIcon from "../../assets/images/emoticons/onion-head/whipplz.gif";
 import nudgeSound from "../../assets/sounds/nudge.mp3";
-import messageSound from "../../assets/sounds/msn-message.mp3";
 
 const STANDARD_EMOTICONS = [
   { code: ":)", src: SmileIcon, alt: "Smile" },
@@ -237,10 +241,6 @@ type EmoticonCode = (typeof EMOTICONS)[number]["code"];
 type EmoticonPickerTab = "standard" | "exclusive";
 
 const EDITOR_CARET_ANCHOR = "\u200B";
-const MINIMIZED_MESSAGE_DELAY_MS = 5_000;
-const MINIMIZED_TEST_MESSAGE = "Esta é uma mensagem de teste.";
-const TASKBAR_BLINK_INTERVAL_MS = 600;
-const TASKBAR_BLINK_DURATION_MS = TASKBAR_BLINK_INTERVAL_MS * 7;
 
 const EMOTICON_PATTERN = new RegExp(
   `(${EMOTICONS.map((emoticon) =>
@@ -376,6 +376,7 @@ function formatReceivedAt(receivedAt: number) {
 
 function ChatWindow() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [isNudging, setIsNudging] = useState(false);
   const [isEmoticonPickerOpen, setIsEmoticonPickerOpen] = useState(false);
   const [activeEmoticonTab, setActiveEmoticonTab] =
@@ -397,6 +398,8 @@ function ChatWindow() {
     height: number;
   } | null>(null);
   const [message, setMessage] = useState("");
+  const [sendError, setSendError] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
     id ? getChatMessages(id) : [],
   );
@@ -408,11 +411,6 @@ function ChatWindow() {
   const messageComposerRef = useRef<HTMLDivElement>(null);
   const hasPositionedInitialMessagesRef = useRef(false);
   const nudgeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const messageAudioRef = useRef<HTMLAudioElement | null>(null);
-  const minimizedMessageTimerRef = useRef<number | undefined>(undefined);
-  const taskbarBlinkIntervalRef = useRef<number | undefined>(undefined);
-  const taskbarBlinkEndTimerRef = useRef<number | undefined>(undefined);
-  const isTaskbarHighlightedRef = useRef(false);
   const appWindow = useMemo(() => getCurrentWebviewWindow(), []);
   const activeExclusivePack =
     EXCLUSIVE_EMOTICON_PACKS.find(
@@ -468,6 +466,7 @@ function ChatWindow() {
   }, [appWindow]);
 
   const [searchParams] = useSearchParams();
+  const contactUserId = searchParams.get("userId") || "";
   const contactStatus = searchParams.get("status");
   const contactName = searchParams.get("name") || `Contato ${id}`;
   const contactMessage = searchParams.get("message") || "";
@@ -500,10 +499,7 @@ function ChatWindow() {
   }, [messages]);
 
   useEffect(() => {
-    if (!isVideoCallOpen) {
-      setIsVideoCallExpanded(false);
-      return;
-    }
+    if (!isVideoCallOpen) return;
 
     const animationFrame = window.requestAnimationFrame(() => {
       setIsVideoCallExpanded(true);
@@ -513,10 +509,7 @@ function ChatWindow() {
   }, [isVideoCallOpen]);
 
   useLayoutEffect(() => {
-    if (!isVideoCallOpen) {
-      setVideoCallBounds(null);
-      return;
-    }
+    if (!isVideoCallOpen) return;
 
     const chatSurface = chatSurfaceRef.current;
     const messagesContainer = messagesContainerRef.current;
@@ -550,17 +543,9 @@ function ChatWindow() {
   }, [isVideoCallOpen]);
 
   useEffect(() => {
-    if (!isVideoCallOpen) {
-      setCameraStatus("idle");
-      setNativeCameraStreamUrl("");
-      return;
-    }
+    if (!isVideoCallOpen) return;
 
     let isDisposed = false;
-    let cameraStartDelayId: number | undefined;
-    setCameraStatus("requesting");
-    setCameraError("");
-    setNativeCameraStreamUrl("");
 
     async function startCamera() {
       try {
@@ -580,44 +565,118 @@ function ChatWindow() {
       }
     }
 
-    cameraStartDelayId = window.setTimeout(() => {
+    const cameraStartDelayId = window.setTimeout(() => {
+      setCameraStatus("requesting");
+      setCameraError("");
+      setNativeCameraStreamUrl("");
       void startCamera();
     }, 220);
 
     return () => {
       isDisposed = true;
-      if (cameraStartDelayId !== undefined) {
-        window.clearTimeout(cameraStartDelayId);
-      }
-      setNativeCameraStreamUrl("");
+      window.clearTimeout(cameraStartDelayId);
       void invoke("stop_native_camera");
     };
   }, [isVideoCallOpen]);
 
-  const handleSendMessage = () => {
+  const handleToggleVideoCall = () => {
+    if (isVideoCallOpen) {
+      setIsVideoCallExpanded(false);
+      setVideoCallBounds(null);
+      setCameraStatus("idle");
+      setNativeCameraStreamUrl("");
+    }
+    setIsVideoCallOpen((isOpen) => !isOpen);
+  };
+
+  const handleSendMessage = async () => {
     const trimmedMessage = message.trim();
 
-    if (!trimmedMessage) return;
-
-    const sentMessage: ChatMessage = {
-      id: Date.now(),
-      author: "me",
-      text: trimmedMessage,
-    };
-
-    setMessages((currentMessages) =>
-      id
-        ? appendChatMessage(id, sentMessage)
-        : [...currentMessages, sentMessage],
-    );
-    setMessage("");
-    messageInputRef.current?.replaceChildren();
-    editorSelectionRef.current = null;
+    if (!trimmedMessage || !id || !user || !contactUserId || isSending) return;
+    setIsSending(true);
+    setSendError("");
+    try {
+      const identity = await registerCurrentDevice(user.id);
+      const [recipientKeys, ownKeys] = await Promise.all([
+        listPublicKeys(contactUserId),
+        listPublicKeys(user.id),
+      ]);
+      if (recipientKeys.length === 0) {
+        throw new Error(`${contactName} precisa abrir a versão atualizada do aplicativo uma vez para ativar a criptografia.`);
+      }
+      const targets = [
+        ...recipientKeys.map((key) => ({ userId: contactUserId, key })),
+        ...ownKeys.map((key) => ({ userId: user.id, key })),
+      ];
+      const envelopes = await Promise.all(
+        targets.map(({ userId: recipientUserId, key }) =>
+          encryptForDevice(trimmedMessage, id, recipientUserId, key),
+        ),
+      );
+      const sent = await sendEncryptedMessage(id, identity.deviceId, envelopes);
+      const chatMessage: ChatMessage = { id: sent._id, author: "me", text: trimmedMessage };
+      setMessages((current) => {
+        const updated = [...current, chatMessage];
+        saveChatMessages(id, updated);
+        return updated;
+      });
+      setMessage("");
+      if (messageInputRef.current) messageInputRef.current.innerHTML = "";
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "Não foi possível enviar a mensagem");
+    } finally {
+      setIsSending(false);
+    }
   };
+
+  const decryptApiMessage = useCallback(async (apiMessage: ApiEncryptedMessage): Promise<ChatMessage | null> => {
+    if (!id || !user) return null;
+    const identity = await registerCurrentDevice(user.id);
+    const envelope = apiMessage.envelopes.find((item) => item.recipientDeviceId === identity.deviceId);
+    if (!envelope) return null;
+    try {
+      return {
+        id: apiMessage._id,
+        author: apiMessage.senderUserId === user.id ? "me" : "contact",
+        text: await decryptEnvelope(user.id, id, envelope.payload),
+        receivedAt: apiMessage.senderUserId === user.id ? undefined : new Date(apiMessage.sentAt).getTime(),
+      };
+    } catch {
+      return null;
+    }
+  }, [id, user]);
+
+  useEffect(() => {
+    if (!id || !user) return;
+    let cancelled = false;
+    void registerCurrentDevice(user.id)
+      .then(() => listEncryptedMessages(id))
+      .then((history) => Promise.all(history.map(decryptApiMessage)))
+      .then((decrypted) => {
+        if (cancelled) return;
+        const available = decrypted.filter((item): item is ChatMessage => item !== null);
+        setMessages(available);
+        saveChatMessages(id, available);
+      })
+      .catch((error) => {
+        if (!cancelled) setSendError(error instanceof Error ? error.message : "Erro ao carregar mensagens");
+      });
+
+    const socket = connectRealtime((incoming) => {
+      if (incoming.conversationId !== id) return;
+      void decryptApiMessage(incoming as ApiEncryptedMessage).then((decrypted) => {
+        if (!decrypted || cancelled) return;
+        setMessages(appendChatMessage(id, decrypted));
+      });
+    });
+    return () => {
+      cancelled = true;
+      socket?.disconnect();
+    };
+  }, [decryptApiMessage, id, user]);
 
   const applyTaskbarHighlight = useCallback(
     (highlighted: boolean) => {
-      isTaskbarHighlightedRef.current = highlighted;
       const attentionType = highlighted
         ? UserAttentionType.Informational
         : null;
@@ -635,74 +694,11 @@ function ChatWindow() {
     [appWindow, contactName],
   );
 
-  const stopTaskbarBlinkTimers = useCallback(() => {
-    if (taskbarBlinkIntervalRef.current !== undefined) {
-      window.clearInterval(taskbarBlinkIntervalRef.current);
-      taskbarBlinkIntervalRef.current = undefined;
-    }
-    if (taskbarBlinkEndTimerRef.current !== undefined) {
-      window.clearTimeout(taskbarBlinkEndTimerRef.current);
-      taskbarBlinkEndTimerRef.current = undefined;
-    }
-  }, []);
-
   const clearTaskbarHighlight = useCallback(() => {
-    stopTaskbarBlinkTimers();
     applyTaskbarHighlight(false);
-  }, [applyTaskbarHighlight, stopTaskbarBlinkTimers]);
-
-  const fixTaskbarHighlight = useCallback(() => {
-    stopTaskbarBlinkTimers();
-    applyTaskbarHighlight(true);
-  }, [applyTaskbarHighlight, stopTaskbarBlinkTimers]);
-
-  const blinkTaskbarInAmber = useCallback(() => {
-    stopTaskbarBlinkTimers();
-    applyTaskbarHighlight(true);
-    taskbarBlinkIntervalRef.current = window.setInterval(() => {
-      applyTaskbarHighlight(!isTaskbarHighlightedRef.current);
-    }, TASKBAR_BLINK_INTERVAL_MS);
-    taskbarBlinkEndTimerRef.current = window.setTimeout(
-      fixTaskbarHighlight,
-      TASKBAR_BLINK_DURATION_MS,
-    );
-  }, [applyTaskbarHighlight, fixTaskbarHighlight, stopTaskbarBlinkTimers]);
-
-  const playMessageNotificationSound = useCallback(() => {
-    const audio = messageAudioRef.current;
-    if (!audio) return;
-
-    audio.pause();
-    audio.currentTime = 0;
-    void audio.play().catch((error) => {
-      console.error("Erro ao reproduzir o som de nova mensagem:", error);
-    });
-  }, []);
+  }, [applyTaskbarHighlight]);
 
   const handleMinimizeConversation = () => {
-    if (minimizedMessageTimerRef.current !== undefined) {
-      window.clearTimeout(minimizedMessageTimerRef.current);
-    }
-
-    minimizedMessageTimerRef.current = window.setTimeout(() => {
-      const receivedAt = Date.now();
-      const testMessage: ChatMessage = {
-        id: receivedAt,
-        author: "contact",
-        text: MINIMIZED_TEST_MESSAGE,
-        receivedAt,
-      };
-
-      setMessages((currentMessages) =>
-        id
-          ? appendChatMessage(id, testMessage)
-          : [...currentMessages, testMessage],
-      );
-      minimizedMessageTimerRef.current = undefined;
-      blinkTaskbarInAmber();
-      playMessageNotificationSound();
-    }, MINIMIZED_MESSAGE_DELAY_MS);
-
     void appWindow.minimize();
   };
 
@@ -718,9 +714,6 @@ function ChatWindow() {
       });
 
     return () => {
-      if (minimizedMessageTimerRef.current !== undefined) {
-        window.clearTimeout(minimizedMessageTimerRef.current);
-      }
       unlistenFocusChanged?.();
       clearTaskbarHighlight();
     };
@@ -812,19 +805,6 @@ function ChatWindow() {
     return () => {
       audio.pause();
       nudgeAudioRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const audio = new Audio(messageSound);
-    audio.preload = "auto";
-    audio.volume = 1;
-    audio.load();
-    messageAudioRef.current = audio;
-
-    return () => {
-      audio.pause();
-      messageAudioRef.current = null;
     };
   }, []);
 
@@ -1218,7 +1198,7 @@ function ChatWindow() {
             <div className="relative min-h-0 flex-1 rounded-t-[9px] bg-gradient-to-b from-white to-[#fbfdfe]">
               {!message && (
                 <span className="pointer-events-none absolute left-3 top-3 text-sm font-normal text-[#829aa6]">
-                  Digite uma mensagem...
+                  Digite uma mensagem
                 </span>
               )}
               <div
@@ -1246,7 +1226,7 @@ function ChatWindow() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    handleSendMessage();
+                    void handleSendMessage();
                     return;
                   }
 
@@ -1608,7 +1588,7 @@ function ChatWindow() {
                       : "Iniciar conversa por vídeo"
                   }
                   aria-pressed={isVideoCallOpen}
-                  onClick={() => setIsVideoCallOpen((isOpen) => !isOpen)}
+                  onClick={handleToggleVideoCall}
                   className="rounded-md border border-transparent p-2 transition-colors hover:border-white hover:bg-white/70"
                 >
                   <MdOutlineVideoChat className="text-[#527b90]" size={20} />
@@ -1617,21 +1597,22 @@ function ChatWindow() {
 
               <button
                 type="button"
-                onClick={handleSendMessage}
-                disabled={!message.trim()}
+                onClick={() => void handleSendMessage()}
+                disabled={!message.trim() || isSending}
+                title="Enviar mensagem criptografada"
                 className="rounded-md border border-[#3989b1] bg-gradient-to-b from-[#78c5e5] to-[#3295c2] px-4 py-1.5 text-xs font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_1px_2px_rgba(31,82,108,0.24)] transition hover:from-[#8bd1ec] hover:to-[#3aa2cf] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Enviar
+                {isSending ? "Enviando..." : "Enviar"}
               </button>
             </div>
           </div>
         </section>
 
         <footer className="flex min-h-6 shrink-0 items-center px-3 pb-1 text-[10px] text-[#67899a]">
-          <p>
-            {lastReceivedAt
+          <p className={sendError ? "text-red-600" : undefined}>
+            {sendError || (lastReceivedAt
               ? `Última mensagem recebida em ${lastReceivedAt}`
-              : "Nenhuma mensagem recebida nesta conversa"}
+              : "Nenhuma mensagem recebida nesta conversa")}
           </p>
         </footer>
       </div>

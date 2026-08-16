@@ -1,73 +1,52 @@
-# React + TypeScript + Vite
+# MSN Modern
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Cliente desktop inspirado no MSN Messenger, construído com React, TypeScript e
+Tauri. O servidor fica em [`server/`](server/) e usa Node.js, Fastify, Socket.IO,
+Mongoose e MongoDB.
 
-Currently, two official plugins are available:
+## Desenvolvimento
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Requisitos: Node.js 22+, Rust compatível com Tauri, Docker e Docker Compose.
 
-## React Compiler
+```bash
+# Banco de dados
+docker compose up -d mongodb
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+# Backend
+cp server/.env.example server/.env
+npm --prefix server install
+npm run server:dev
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Cliente, em outro terminal
+npm install
+npm run tauri dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+O backend escuta em `http://127.0.0.1:3333` por padrão. Consulte o
+[`server/README.md`](server/README.md) para rotas e decisões de segurança.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Fluxos conectados
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+O cliente já usa a API para cadastro, login, renovação de sessão, busca de
+usuário por e-mail, criação/listagem de conversas e notificações em tempo real.
+A sessão fica em `localStorage` para ser compartilhada entre a janela principal
+e as janelas nativas de conversa.
+
+O envio e o histórico offline usam envelopes cifrados no cliente com ECDH P-256,
+HKDF-SHA-256 e AES-256-GCM. O servidor e o MongoDB recebem somente ciphertext.
+Esta implementação é adequada ao protótipo; antes de produção ainda são
+necessários armazenamento nativo seguro das chaves, verificação de identidade e
+auditoria criptográfica independente.
+
+Para testar com duas contas, cadastre a primeira, encerre a sessão, cadastre a
+segunda e adicione a outra conta usando o e-mail exato. A conversa passará a
+aparecer para ambas.
+
+## Comandos úteis
+
+```bash
+npm run build
+npm run lint
+npm run server:build
+npm run server:test
 ```

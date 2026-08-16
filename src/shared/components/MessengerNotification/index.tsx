@@ -3,7 +3,7 @@ import { PictureFrame } from "../../constants/PictureFrame/page";
 
 export interface MessengerNotificationData {
   id: number;
-  contactId: number;
+  contactId: string;
   contactName: string;
   kind: "online" | "message";
   text: string;

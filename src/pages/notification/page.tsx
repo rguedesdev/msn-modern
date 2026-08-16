@@ -11,7 +11,7 @@ function NotificationWindow() {
   const appWindow = useMemo(() => getCurrentWindow(), []);
   const notification: MessengerNotificationData = {
     id: Number(searchParams.get("id")) || 0,
-    contactId: Number(searchParams.get("contactId")) || 0,
+    contactId: searchParams.get("contactId") || "",
     contactName: searchParams.get("contactName") || "Contato",
     kind: searchParams.get("kind") === "message" ? "message" : "online",
     text: searchParams.get("text") || "",

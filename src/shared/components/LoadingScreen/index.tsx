@@ -1,11 +1,12 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { isTauri } from "@tauri-apps/api/core";
 import { MdClose, MdCropSquare, MdMinimize } from "react-icons/md";
 
 import MSNLogo3 from "../../../assets/images/msn3.jpg";
 import MessengerLogo from "../../../assets/images/messenger.png";
 
 function LoadingScreen() {
-  const appWindow = getCurrentWebviewWindow();
+  const appWindow = isTauri() ? getCurrentWebviewWindow() : null;
 
   return (
     <section className="h-screen w-screen bg-transparent font-sans antialiased">
@@ -28,7 +29,7 @@ function LoadingScreen() {
             <button
               type="button"
               aria-label="Minimizar"
-              onClick={() => void appWindow.minimize()}
+              onClick={() => void appWindow?.minimize()}
               className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
             >
               <MdMinimize size={17} />
@@ -36,7 +37,7 @@ function LoadingScreen() {
             <button
               type="button"
               aria-label="Maximizar ou restaurar"
-              onClick={() => void appWindow.toggleMaximize()}
+              onClick={() => void appWindow?.toggleMaximize()}
               className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
             >
               <MdCropSquare size={13} />
@@ -44,7 +45,7 @@ function LoadingScreen() {
             <button
               type="button"
               aria-label="Fechar"
-              onClick={() => void appWindow.close()}
+              onClick={() => void appWindow?.close()}
               className="grid w-10 place-items-center rounded-tr-[13px] text-[#426b81] transition-colors hover:bg-[#d86161] hover:text-white"
             >
               <MdClose size={18} />

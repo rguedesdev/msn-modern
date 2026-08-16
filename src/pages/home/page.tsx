@@ -1,11 +1,11 @@
 // Imports Principais
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 
 // Importa as funções nativas do Tauri para controle de janelas
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"; // Para cria
-import { emit } from "@tauri-apps/api/event";
 
 // Componentes
 import { PictureFrame } from "../../shared/constants/PictureFrame/page";
@@ -14,12 +14,16 @@ import { Input } from "../../shared/components/Input";
 // Constants
 import { getTextEffectStyle } from "../../shared/constants/TextEffects/page";
 import { STATUS_CONFIG } from "../../shared/constants/StatusConfig/page";
-import {
-  appendChatMessage,
-  getChatMessages,
-} from "../../shared/utils/chatStorage";
+import { getChatMessages } from "../../shared/utils/chatStorage";
 import type { MessengerNotificationData } from "../../shared/components/MessengerNotification";
 import { showStyledNotificationWindow } from "../../shared/utils/styledNotification";
+import { useAuth } from "../../shared/auth/AuthContext";
+import {
+  createDirectConversation,
+  findUserByEmail,
+  listConversations,
+} from "../../shared/api/conversations";
+import { connectRealtime } from "../../shared/api/realtime";
 
 // Icones
 import { TbPhoneCall } from "react-icons/tb";
@@ -67,19 +71,12 @@ import messageSound from "../../assets/sounds/msn-message.mp3";
 type ContactStatus = "online" | "ocupado" | "ausente" | "offline";
 
 interface Contact {
-  id: number;
+  id: string;
+  userId: string;
   name: string;
   status: ContactStatus;
   msg: string;
   group: string;
-}
-
-interface IncomingMessage {
-  id: number;
-  contactId: number;
-  sender: string;
-  text: string;
-  receivedAt: number;
 }
 
 interface MediaInfo {
@@ -592,50 +589,24 @@ function MediaSourceIcon({ source }: { source: string }) {
   );
 }
 
-const INITIAL_CONTACTS: Contact[] = [
-  {
-    id: 1,
-    name: "Ju_S2_Anime",
-    status: "online",
-    msg: "Ouvindo: Linkin Park",
-    group: "Escola",
-  },
-  {
-    id: 2,
-    name: "XXx_Hacker_xXX",
-    status: "ocupado",
-    msg: "Não incomodar!",
-    group: "Trabalho",
-  },
-  {
-    id: 3,
-    name: "Vash_The_Stampede",
-    status: "ausente",
-    msg: "Fui almoçar",
-    group: "Geral",
-  },
-  {
-    id: 4,
-    name: "Sasuke_Uchiha",
-    status: "offline",
-    msg: "",
-    group: "Geral",
-  },
-];
-
-const SIMULATED_ONLINE_DELAY_MS = 5_000;
-const SIMULATED_MESSAGE_DELAY_MS = SIMULATED_ONLINE_DELAY_MS + 5_000;
-const SIMULATED_MESSAGE_ID = 4_001;
+const INITIAL_CONTACTS: Contact[] = [];
 const ENABLE_LISTENING_ACTIVITY = true;
 const SHARE_LISTENING_ACTIVITY_KEY = "msn-share-listening-activity";
 
 function HomePage() {
-  const appWindow = useMemo(() => getCurrentWindow(), []);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const appWindow = useMemo(() => (isTauri() ? getCurrentWindow() : null), []);
   const [isMaximized, setIsMaximized] = useState(false);
   const [activeChat, setActiveChat] = useState<Contact | null>(null); // Armazena a conversa aberta interna (modo maximizado)
   const [contatos, setContatos] = useState<Contact[]>(INITIAL_CONTACTS);
-  const [latestIncomingMessage, setLatestIncomingMessage] =
-    useState<IncomingMessage | null>(null);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(true);
+  const [contactsError, setContactsError] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [isAddingContact, setIsAddingContact] = useState(false);
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [addContactError, setAddContactError] = useState("");
+  const [isAddingContactPending, setIsAddingContactPending] = useState(false);
   const onlineAudioRef = useRef<HTMLAudioElement | null>(null);
   const messageAudioRef = useRef<HTMLAudioElement | null>(null);
   const previousContactStatusesRef = useRef(
@@ -656,6 +627,96 @@ function HomePage() {
   );
   const [currentMedia, setCurrentMedia] = useState<MediaInfo | null>(null);
 
+  const loadContacts = useCallback(async () => {
+    if (!user) return;
+    setContactsError("");
+    try {
+      const conversations = await listConversations();
+      const mappedContacts = conversations.flatMap<Contact>((conversation) => {
+        const participant = conversation.participants.find(
+          (candidate) => candidate._id !== user.id,
+        );
+        if (!participant) return [];
+        return [{
+          id: conversation._id,
+          userId: participant._id,
+          name: participant.displayName,
+          status: "offline",
+          msg: participant.email,
+          group: "Geral",
+        }];
+      });
+      setContatos(mappedContacts);
+    } catch (error) {
+      setContactsError(error instanceof Error ? error.message : "Erro ao carregar contatos");
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadContacts(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadContacts]);
+
+  useEffect(() => {
+    const socket = connectRealtime((encryptedMessage) => {
+      const contact = contatos.find((item) => item.id === encryptedMessage.conversationId);
+      if (!contact || encryptedMessage.senderUserId === user?.id) return;
+
+      const notification: MessengerNotificationData = {
+        id: Date.now(),
+        contactId: contact.id,
+        contactName: contact.name,
+        kind: "message",
+        text: "Nova mensagem criptografada recebida.",
+      };
+      if (isTauri()) void showStyledNotificationWindow(notification);
+      const audio = messageAudioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        void audio.play();
+      }
+    }, (onlineUserIds) => {
+      const online = new Set(onlineUserIds);
+      setContatos((current) => current.map((contact) => ({
+        ...contact,
+        status: online.has(contact.userId) ? "online" : "offline",
+      })));
+    }, ({ userId, online }) => {
+      setContatos((current) => current.map((contact) =>
+        contact.userId === userId ? { ...contact, status: online ? "online" : "offline" } : contact,
+      ));
+    });
+    return () => {
+      socket?.disconnect();
+    };
+  }, [contatos, user?.id]);
+
+  async function handleAddContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAddContactError("");
+    setIsAddingContactPending(true);
+    try {
+      const foundUser = await findUserByEmail(newContactEmail);
+      if (!foundUser) throw new Error("Nenhum usuário encontrado com esse e-mail");
+      if (foundUser.id === user?.id) throw new Error("Você não pode adicionar a si mesmo");
+      await createDirectConversation(foundUser.id);
+      setNewContactEmail("");
+      setIsAddingContact(false);
+      await loadContacts();
+    } catch (error) {
+      setAddContactError(error instanceof Error ? error.message : "Erro ao adicionar contato");
+    } finally {
+      setIsAddingContactPending(false);
+    }
+  }
+
+  async function handleLogout() {
+    await signOut();
+    navigate("/", { replace: true });
+  }
+
   const startEditingPersonalMessage = () => {
     setPersonalMessageDraft(personalMessage);
     setIsEditingPersonalMessage(true);
@@ -674,10 +735,7 @@ function HomePage() {
       String(shareListeningActivity),
     );
 
-    if (!shareListeningActivity) {
-      setCurrentMedia(null);
-      return;
-    }
+    if (!shareListeningActivity || !isTauri()) return;
 
     let isDisposed = false;
     let radioTrackCache: {
@@ -834,6 +892,7 @@ function HomePage() {
   }, [shareListeningActivity]);
 
   useEffect(() => {
+    if (!appWindow) return;
     const previousHtmlBackground = document.documentElement.style.background;
     const previousBodyBackground = document.body.style.background;
 
@@ -906,9 +965,11 @@ function HomePage() {
       text: "acabou de entrar.",
     };
 
-    void showStyledNotificationWindow(notification).catch((error) => {
-      console.error("Erro ao exibir notificação de contato online:", error);
-    });
+    if (isTauri()) {
+      void showStyledNotificationWindow(notification).catch((error) => {
+        console.error("Erro ao exibir notificação de contato online:", error);
+      });
+    }
 
     const audio = onlineAudioRef.current;
     if (!audio) return;
@@ -920,99 +981,17 @@ function HomePage() {
     });
   }, [contatos]);
 
-  useEffect(() => {
-    const simulationTimer = window.setTimeout(() => {
-      setContatos((currentContacts) =>
-        currentContacts.map((contact) =>
-          contact.id === 4
-            ? {
-                ...contact,
-                status: "online",
-                msg: "Acabou de entrar",
-              }
-            : contact,
-        ),
-      );
-    }, SIMULATED_ONLINE_DELAY_MS);
-
-    return () => window.clearTimeout(simulationTimer);
-  }, []);
-
-  useEffect(() => {
-    const simulationTimer = window.setTimeout(() => {
-      const incomingMessage: IncomingMessage = {
-        id: SIMULATED_MESSAGE_ID,
-        contactId: 4,
-        sender: "Sasuke_Uchiha",
-        text: "Oi! Você está aí?",
-        receivedAt: Date.now(),
-      };
-
-      const storedMessage = {
-        id: incomingMessage.id,
-        author: "contact" as const,
-        text: incomingMessage.text,
-        receivedAt: incomingMessage.receivedAt,
-      };
-
-      const storedMessages = appendChatMessage(
-        String(incomingMessage.contactId),
-        storedMessage,
-      );
-      const persistedMessage =
-        storedMessages.find((message) => message.id === incomingMessage.id) ??
-        storedMessage;
-      setLatestIncomingMessage(incomingMessage);
-      const notification: MessengerNotificationData = {
-        id: incomingMessage.id,
-        contactId: incomingMessage.contactId,
-        contactName: incomingMessage.sender,
-        kind: "message",
-        text: incomingMessage.text,
-      };
-
-      void showStyledNotificationWindow(notification).catch((error) => {
-        console.error("Erro ao exibir notificação de mensagem:", error);
-      });
-      void emit("msn-message-received", {
-        chatId: String(incomingMessage.contactId),
-          message: persistedMessage,
-      });
-    }, SIMULATED_MESSAGE_DELAY_MS);
-
-    return () => window.clearTimeout(simulationTimer);
-  }, []);
-
-  useEffect(() => {
-    if (!latestIncomingMessage) return;
-
-    const audio = messageAudioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-      void audio.play().catch((error) => {
-        console.error("Erro ao reproduzir notificação de mensagem:", error);
-      });
-    }
-
-    const dismissTimer = window.setTimeout(() => {
-      setLatestIncomingMessage((currentMessage) =>
-        currentMessage?.id === latestIncomingMessage.id ? null : currentMessage,
-      );
-    }, 5_000);
-
-    return () => window.clearTimeout(dismissTimer);
-  }, [latestIncomingMessage]);
-
   // Lógica do duplo clique no contato
   const handleContactClick = (contato: Contact) => {
-    if (isMaximized) {
+    if (isMaximized || !appWindow) {
+      if (!appWindow) setIsMaximized(true);
       setActiveChat(contato);
     } else {
       const chatParams = new URLSearchParams({
         status: contato.status,
         name: contato.name,
         message: contato.msg,
+        userId: contato.userId,
       });
 
       // ⚠️ ALTERADO AQUI: Adicionado index.html antes do hash #
@@ -1042,7 +1021,7 @@ function HomePage() {
   const tabsConfig = [
     {
       id: "geral",
-      label: "Online",
+      label: "Contatos",
       icon: <MdOutlinePerson size={18} />,
     },
     { id: "grupos", label: "Grupos", icon: <MdOutlineGroups size={18} /> },
@@ -1055,11 +1034,14 @@ function HomePage() {
 
   // 4. Função que filtra quais contatos aparecem baseando-se na aba ativa
   const getFiltrados = () => {
-    if (activeTab === "geral")
-      return contatos.filter((c) => c.status !== "offline");
-    if (activeTab === "offlines")
-      return contatos.filter((c) => c.status === "offline");
-    return contatos; // Para grupos faremos uma lógica de agrupamento abaixo
+    const normalizedSearch = contactSearch.trim().toLocaleLowerCase("pt-BR");
+    const searched = normalizedSearch
+      ? contatos.filter((contact) =>
+          `${contact.name} ${contact.msg}`.toLocaleLowerCase("pt-BR").includes(normalizedSearch),
+        )
+      : contatos;
+    if (activeTab === "offlines") return searched.filter((c) => c.status === "offline");
+    return searched;
   };
 
   const statusColors: Record<ContactStatus, string> = {
@@ -1075,25 +1057,25 @@ function HomePage() {
         type="button"
         aria-label="Redimensionar pela borda superior"
         className="absolute inset-x-3 top-0 z-50 h-1 cursor-n-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("North")}
+        onMouseDown={() => void appWindow?.startResizeDragging("North")}
       />
       <button
         type="button"
         aria-label="Redimensionar pela borda inferior"
         className="absolute inset-x-3 bottom-0 z-50 h-1 cursor-s-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("South")}
+        onMouseDown={() => void appWindow?.startResizeDragging("South")}
       />
       <button
         type="button"
         aria-label="Redimensionar pela borda esquerda"
         className="absolute inset-y-3 left-0 z-50 w-1 cursor-w-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("West")}
+        onMouseDown={() => void appWindow?.startResizeDragging("West")}
       />
       <button
         type="button"
         aria-label="Redimensionar pela borda direita"
         className="absolute inset-y-3 right-0 z-50 w-1 cursor-e-resize"
-        onMouseDown={() => void appWindow.startResizeDragging("East")}
+        onMouseDown={() => void appWindow?.startResizeDragging("East")}
       />
 
       <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-[#6694ad] bg-gradient-to-b from-[#f8fcfe] via-[#edf7fb] to-[#d8edf6]">
@@ -1115,7 +1097,7 @@ function HomePage() {
             <button
               type="button"
               aria-label="Minimizar"
-              onClick={() => void appWindow.minimize()}
+              onClick={() => void appWindow?.minimize()}
               className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
             >
               <MdMinimize size={17} />
@@ -1123,7 +1105,7 @@ function HomePage() {
             <button
               type="button"
               aria-label="Maximizar ou restaurar"
-              onClick={() => void appWindow.toggleMaximize()}
+              onClick={() => void appWindow?.toggleMaximize()}
               className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
             >
               <MdCropSquare size={13} />
@@ -1131,7 +1113,7 @@ function HomePage() {
             <button
               type="button"
               aria-label="Fechar"
-              onClick={() => void appWindow.close()}
+              onClick={() => void appWindow?.close()}
               className="grid w-10 place-items-center rounded-tr-[13px] text-[#426b81] transition-colors hover:bg-[#d86161] hover:text-white"
             >
               <MdClose size={18} />
@@ -1155,7 +1137,7 @@ function HomePage() {
                   className="text-[20px] font-extrabold select-none"
                   style={getTextEffectStyle("frias")}
                 >
-                  Kon-sama ZS
+                  {user?.displayName ?? "Usuário"}
                 </span>
 
                 <div
@@ -1302,9 +1284,11 @@ function HomePage() {
                     <input
                       type="checkbox"
                       checked={shareListeningActivity}
-                      onChange={(event) =>
-                        setShareListeningActivity(event.currentTarget.checked)
-                      }
+                      onChange={(event) => {
+                        const shouldShare = event.currentTarget.checked;
+                        setShareListeningActivity(shouldShare);
+                        if (!shouldShare) setCurrentMedia(null);
+                      }}
                       className="h-3.5 w-3.5 accent-[#3295c2]"
                     />
                     Mostrar o que estou ouvindo
@@ -1314,7 +1298,15 @@ function HomePage() {
             </div>
 
             <div className="flex flex-row items-center gap-1 text-[#527b90]">
-              {[<MdOutlinePersonAddAlt key="add" size={21} />, <ImMakeGroup key="group" size={15} />, <TbPhoneCall key="call" size={19} />, <AiOutlineVideoCamera key="video" size={19} />].map((icon) => (
+              <button
+                type="button"
+                title="Adicionar contato"
+                onClick={() => setIsAddingContact((current) => !current)}
+                className="grid h-8 w-8 place-items-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
+              >
+                <MdOutlinePersonAddAlt size={21} />
+              </button>
+              {[<ImMakeGroup key="group" size={15} />, <TbPhoneCall key="call" size={19} />, <AiOutlineVideoCamera key="video" size={19} />].map((icon) => (
                 <button
                   key={icon.key}
                   type="button"
@@ -1323,10 +1315,52 @@ function HomePage() {
                   {icon}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                className="ml-auto rounded-md border border-transparent px-2 py-1 text-xs font-semibold transition-colors hover:border-white hover:bg-white/70"
+              >
+                Sair
+              </button>
             </div>
           </div>
         </div>
       </aside>
+
+      {isAddingContact && (
+        <form
+          onSubmit={handleAddContact}
+          className="rounded-[10px] border border-[#8fb2c3] bg-white/80 px-3 pb-3 shadow-sm"
+        >
+          <Input
+            inputName="E-mail exato do novo contato"
+            type="email"
+            value={newContactEmail}
+            onChange={(event) => setNewContactEmail(event.currentTarget.value)}
+            required
+            disabled={isAddingContactPending}
+          />
+          {addContactError && (
+            <p role="alert" className="mt-2 text-xs text-red-700">{addContactError}</p>
+          )}
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAddingContact(false)}
+              className="rounded px-3 py-1 text-xs text-[#52758a] hover:bg-white"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isAddingContactPending}
+              className="rounded border border-[#3989b1] bg-[#3295c2] px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+            >
+              {isAddingContactPending ? "Adicionando..." : "Adicionar"}
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* CONTAINER FLEXBOX DIRECIONAL PARA SUPORTAR O CHAT LATERAL */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-row gap-3">
@@ -1335,7 +1369,11 @@ function HomePage() {
           className={`${isMaximized && activeChat ? "w-[380px]" : "flex-1"} flex h-full flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-white/70 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)] transition-all duration-300`}
         >
           {/* Input de busca mantido no topo */}
-          <Input inputName="Buscar contato" />
+          <Input
+            inputName="Buscar contato"
+            value={contactSearch}
+            onChange={(event) => setContactSearch(event.currentTarget.value)}
+          />
 
           {/* BARRA DE ABAS (TABS) */}
           <div className="border-b border-[#b9d3df]">
@@ -1372,7 +1410,20 @@ function HomePage() {
 
           {/* LISTAGEM DE CONTATOS FILTRADA COM SCROLL INTERNO */}
           <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
-            {activeTab !== "grupos"
+            {isLoadingContacts && (
+              <p className="py-4 text-center text-xs italic text-[#7894a2]">Carregando contatos...</p>
+            )}
+            {contactsError && (
+              <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+                {contactsError}
+              </p>
+            )}
+            {!isLoadingContacts && !contactsError && contatos.length === 0 && (
+              <p className="py-4 text-center text-xs italic text-[#7894a2]">
+                Nenhum contato. Use o botão de adicionar pessoa acima.
+              </p>
+            )}
+            {!isLoadingContacts && !contactsError && (activeTab !== "grupos"
               ? // RENDERIZAÇÃO PADRÃO (GERAL OU OFFLINES)
                 getFiltrados().map((contato) => (
                   <div
@@ -1405,8 +1456,8 @@ function HomePage() {
                   </div>
                 ))
               : // RENDERIZAÇÃO POR GRUPOS
-                ["Escola", "Trabalho", "Geral"].map((grupoName) => {
-                  const contatosDoGrupo = contatos.filter(
+                ["Geral"].map((grupoName) => {
+                  const contatosDoGrupo = getFiltrados().filter(
                     (c) => c.group === grupoName,
                   );
                   return (
@@ -1435,7 +1486,7 @@ function HomePage() {
                       ))}
                     </div>
                   );
-                })}
+                }))}
           </div>
         </section>
 
@@ -1485,10 +1536,14 @@ function HomePage() {
             </div>
 
             {/* Input de Envio de Mensagem */}
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Envio temporariamente bloqueado até a ativação das chaves E2EE neste dispositivo.
+            </p>
             <input
               type="text"
-              placeholder={`Enviar mensagem para ${activeChat.name}...`}
-              className="rounded-[8px] border border-[#9dbdcc] bg-white/85 p-2 text-sm text-[#304f60] shadow-inner outline-none transition-colors placeholder:text-[#829aa6] focus:border-[#4d9fc4] focus:ring-2 focus:ring-[#70b9d8]/25"
+              disabled
+              placeholder={`E2EE pendente para ${activeChat.name}`}
+              className="cursor-not-allowed rounded-[8px] border border-[#9dbdcc] bg-zinc-100/85 p-2 text-sm text-[#304f60] opacity-70 shadow-inner outline-none placeholder:text-[#829aa6]"
             />
           </section>
         )}

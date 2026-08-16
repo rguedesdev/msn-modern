@@ -5,11 +5,14 @@ import "./index.css";
 import { HashRouter } from "react-router-dom"; // 👈 Importa o HashRouter
 
 import App from "./App.tsx";
+import { AuthProvider } from "./shared/auth/AuthContext.tsx";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <HashRouter>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </HashRouter>
   </StrictMode>,
 );

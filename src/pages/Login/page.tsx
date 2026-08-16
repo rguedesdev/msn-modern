@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { isTauri } from "@tauri-apps/api/core";
 
 // Componentes
 import { Input } from "../../shared/components/Input";
@@ -21,14 +22,25 @@ import {
 
 // Imagens
 import MSNLogo2 from "../../assets/images/msn2.jpg";
+import { useAuth } from "../../shared/auth/AuthContext";
 // import MSNLogo3 from "./assets/msn3.jpg";
 
 function LoginPage() {
+  const { user, signIn, signUp } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] =
     useState<keyof typeof STATUS_CONFIG>("online");
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
-  const appWindow = useMemo(() => getCurrentWebviewWindow(), []);
+  const appWindow = useMemo(
+    () => (isTauri() ? getCurrentWebviewWindow() : null),
+    [],
+  );
 
   const navigate = useNavigate();
 
@@ -38,8 +50,10 @@ function LoginPage() {
 
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
-    void appWindow.setDecorations(false);
-    void appWindow.setShadow(false);
+    if (appWindow) {
+      void appWindow.setDecorations(false);
+      void appWindow.setShadow(false);
+    }
 
     return () => {
       document.documentElement.style.background = previousHtmlBackground;
@@ -50,13 +64,31 @@ function LoginPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(false);
-    }, 5000);
+    }, 900);
 
     return () => clearTimeout(timer);
   }, []);
 
-  function handleSignIn() {
-    navigate("/home");
+  useEffect(() => {
+    if (user) navigate("/home", { replace: true });
+  }, [navigate, user]);
+
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthError("");
+    setIsSubmitting(true);
+    try {
+      if (isRegistering) {
+        await signUp(email, displayName, password);
+      } else {
+        await signIn(email, password);
+      }
+      navigate("/home", { replace: true });
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Não foi possível autenticar");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -85,7 +117,7 @@ function LoginPage() {
                   <button
                     type="button"
                     aria-label="Minimizar"
-                    onClick={() => void appWindow.minimize()}
+                    onClick={() => void appWindow?.minimize()}
                     className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
                   >
                     <MdMinimize size={17} />
@@ -93,7 +125,7 @@ function LoginPage() {
                   <button
                     type="button"
                     aria-label="Maximizar ou restaurar"
-                    onClick={() => void appWindow.toggleMaximize()}
+                    onClick={() => void appWindow?.toggleMaximize()}
                     className="grid w-9 place-items-center text-[#426b81] transition-colors hover:bg-white/50"
                   >
                     <MdCropSquare size={13} />
@@ -101,7 +133,7 @@ function LoginPage() {
                   <button
                     type="button"
                     aria-label="Fechar"
-                    onClick={() => void appWindow.close()}
+                    onClick={() => void appWindow?.close()}
                     className="grid w-10 place-items-center rounded-tr-[13px] text-[#426b81] transition-colors hover:bg-[#d86161] hover:text-white"
                   >
                     <MdClose size={18} />
@@ -212,27 +244,74 @@ function LoginPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 w-full">
-                  <Input inputName="Username ou Email" />
-                  <Input inputName="Senha" type="password" />
-                </div>
+                <form className="contents" onSubmit={handleAuthSubmit}>
+                  <div className="mt-4 w-full">
+                    {isRegistering && (
+                      <Input
+                        inputName="Nome de exibição"
+                        name="displayName"
+                        value={displayName}
+                        onChange={(event) => setDisplayName(event.currentTarget.value)}
+                        autoComplete="name"
+                        minLength={1}
+                        maxLength={80}
+                        required
+                        disabled={isSubmitting}
+                      />
+                    )}
+                    <Input
+                      inputName="Email"
+                      type="email"
+                      name="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.currentTarget.value)}
+                      autoComplete="email"
+                      required
+                      disabled={isSubmitting}
+                    />
+                    <Input
+                      inputName="Senha"
+                      type="password"
+                      name="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.currentTarget.value)}
+                      autoComplete={isRegistering ? "new-password" : "current-password"}
+                      minLength={10}
+                      maxLength={128}
+                      required
+                      disabled={isSubmitting}
+                    />
+                  </div>
 
-                <div className="mt-3 w-full rounded-[9px] border border-white/75 bg-white/35 px-3 pb-3 pt-0.5 shadow-[inset_0_1px_0_white]">
-                  <Checkbox checkboxText="Lembrar minha senha" />
-                  <Checkbox checkboxText="Continuar conectado" />
-                  <Checkbox checkboxText="Entrar automaticamente" />
-                </div>
+                  {!isRegistering && (
+                    <div className="mt-3 w-full rounded-[9px] border border-white/75 bg-white/35 px-3 pb-3 pt-0.5 shadow-[inset_0_1px_0_white]">
+                      <Checkbox checkboxText="Manter conectado nesta execução" />
+                    </div>
+                  )}
 
-                <button
-                  onClick={handleSignIn}
-                  type="button"
-                  className="mt-6 w-full rounded-md border border-[#3989b1] bg-gradient-to-b from-[#78c5e5] to-[#3295c2] px-4 py-3 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_2px_4px_rgba(31,82,108,0.24)] transition hover:from-[#8bd1ec] hover:to-[#3aa2cf] active:translate-y-px"
-                >
-                  ENTRAR
-                </button>
+                  {authError && (
+                    <p role="alert" className="mt-3 w-full rounded-md border border-red-200 bg-red-50/80 px-3 py-2 text-xs text-red-700">
+                      {authError}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="mt-6 w-full rounded-md border border-[#3989b1] bg-gradient-to-b from-[#78c5e5] to-[#3295c2] px-4 py-3 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_2px_4px_rgba(31,82,108,0.24)] transition hover:from-[#8bd1ec] hover:to-[#3aa2cf] active:translate-y-px disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isSubmitting ? "AGUARDE..." : isRegistering ? "CADASTRAR" : "ENTRAR"}
+                  </button>
+                </form>
 
                 <div className="mt-4">
-                  <Footer />
+                  <Footer
+                    isRegistering={isRegistering}
+                    onRegister={() => {
+                      setIsRegistering((current) => !current);
+                      setAuthError("");
+                    }}
+                  />
                 </div>
               </div>
             </div>

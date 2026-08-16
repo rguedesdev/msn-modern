@@ -1,13 +1,16 @@
-interface IInput {
+import type { InputHTMLAttributes } from "react";
+
+interface IInput extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
   inputName: string;
-  type?: "text" | "password";
+  type?: "text" | "password" | "email";
 }
 
-function Input({ inputName, type = "text" }: IInput) {
+function Input({ inputName, type = "text", ...inputProps }: IInput) {
   return (
     <div className="relative mt-3 w-full">
       <input
         type={type}
+        {...inputProps}
         placeholder=" "
         className="peer w-full rounded-[8px] border border-[#9dbdcc] bg-white/75 px-3 py-2.5 text-sm text-[#304f60] shadow-[inset_0_1px_3px_rgba(47,91,113,0.08),0_1px_0_white] outline-none transition-all hover:border-[#70afd0] focus:border-[#4d9fc4] focus:bg-white focus:ring-2 focus:ring-[#70b9d8]/25"
       />

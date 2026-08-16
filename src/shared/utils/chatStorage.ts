@@ -1,5 +1,5 @@
 export interface ChatMessage {
-  id: number;
+  id: number | string;
   author: "me" | "contact";
   text: string;
   receivedAt?: number;
@@ -27,11 +27,11 @@ export function getChatMessages(chatId: string): ChatMessage[] {
       }
 
       didMigrateReceivedAt = true;
-      const idContainsTimestamp = message.id >= 1_000_000_000_000;
+      const idContainsTimestamp = typeof message.id === "number" && message.id >= 1_000_000_000_000;
 
       return {
         ...message,
-        receivedAt: idContainsTimestamp ? message.id : migrationTime,
+        receivedAt: idContainsTimestamp && typeof message.id === "number" ? message.id : migrationTime,
       };
     });
 
