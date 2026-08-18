@@ -26,6 +26,9 @@ export interface AuthSession {
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "")
   ?? "http://127.0.0.1:3333";
 const SESSION_KEY = "msn-modern:session";
+const REFRESH_LOCK_NAME = "msn-modern:refresh-session";
+
+let refreshPromise: Promise<AuthSession | null> | null = null;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -69,21 +72,62 @@ async function readError(response: Response): Promise<string> {
   }
 }
 
-async function refreshSession(currentSession: AuthSession): Promise<AuthSession | null> {
-  const response = await fetch(`${API_URL}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken: currentSession.refreshToken }),
-  });
+async function performSessionRefresh(
+  expiredSession: AuthSession,
+): Promise<AuthSession | null> {
+  const currentSession = getSession();
+  if (!currentSession) return null;
+
+  // Outra requisição ou janela pode ter renovado a sessão enquanto aguardávamos.
+  if (currentSession.refreshToken !== expiredSession.refreshToken) return currentSession;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken: currentSession.refreshToken }),
+    });
+  } catch {
+    throw new ApiError(0, `Não foi possível conectar ao backend em ${API_URL}`);
+  }
+
   if (!response.ok) {
-    clearSession();
-    return null;
+    const latestSession = getSession();
+    if (latestSession?.refreshToken !== currentSession.refreshToken) {
+      return latestSession;
+    }
+    if (response.status === 401) {
+      clearSession();
+      return null;
+    }
+    throw new ApiError(response.status, await readError(response));
+  }
+
+  const latestSession = getSession();
+  if (!latestSession || latestSession.refreshToken !== currentSession.refreshToken) {
+    return latestSession;
   }
 
   const tokens = await response.json() as Omit<AuthSession, "user">;
   const refreshed = { ...tokens, user: currentSession.user };
   saveSession(refreshed);
   return refreshed;
+}
+
+export function refreshSession(
+  expiredSession: AuthSession,
+): Promise<AuthSession | null> {
+  if (refreshPromise) return refreshPromise;
+
+  const refresh = () => performSessionRefresh(expiredSession);
+  refreshPromise = (navigator.locks
+    ? navigator.locks.request(REFRESH_LOCK_NAME, refresh)
+    : refresh()
+  ).finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
 }
 
 export async function apiRequest<T>(

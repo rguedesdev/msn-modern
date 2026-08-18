@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import { API_URL, getSession } from "./client";
+import { API_URL, getSession, refreshSession } from "./client";
 import type { NameEffect, ProfileFrame } from "../constants/ProfileStyle/page";
 
 export interface EncryptedMessageNotification {
@@ -60,6 +60,35 @@ export function connectRealtime(
       ...(initialStatus ? { status: initialStatus } : {}),
     },
     transports: ["websocket"],
+  });
+  let isRefreshingSession = false;
+  socket.on("connect_error", (error) => {
+    if (error.message !== "unauthorized" || isRefreshingSession) return;
+
+    const currentSession = getSession();
+    if (!currentSession) return;
+    const socketAuth = typeof socket.auth === "function" ? null : socket.auth;
+
+    if (socketAuth?.token !== currentSession.accessToken) {
+      socket.auth = { ...socketAuth, token: currentSession.accessToken };
+      socket.connect();
+      return;
+    }
+
+    isRefreshingSession = true;
+    void refreshSession(currentSession)
+      .then((refreshedSession) => {
+        if (!refreshedSession) return;
+        const latestAuth = typeof socket.auth === "function" ? {} : socket.auth;
+        socket.auth = { ...latestAuth, token: refreshedSession.accessToken };
+        socket.connect();
+      })
+      .catch((refreshError) => {
+        console.error("Não foi possível renovar a sessão em tempo real:", refreshError);
+      })
+      .finally(() => {
+        isRefreshingSession = false;
+      });
   });
   socket.on("message:new", onEncryptedMessage);
   if (onPresenceSnapshot) socket.on("presence:snapshot", onPresenceSnapshot);

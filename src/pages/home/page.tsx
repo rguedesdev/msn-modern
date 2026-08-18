@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 
 // Importa as funções nativas do Tauri para controle de janelas
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"; // Para cria
 
@@ -27,6 +28,10 @@ import {
   STATUS_CONFIG,
   type UserStatus,
 } from "../../shared/constants/StatusConfig/page";
+import {
+  OPEN_CONVERSATION_FROM_NOTIFICATION_EVENT,
+  type OpenConversationFromNotificationPayload,
+} from "../../shared/constants/NotificationEvents";
 import {
   CONTACT_STATUS_FRAMES,
   toContactStatus,
@@ -74,6 +79,7 @@ import {
   MdOutlineGroups,
   MdPalette,
   MdPersonOutline,
+  MdSearch,
   MdSettings,
 } from "react-icons/md";
 import { ImMakeGroup } from "react-icons/im";
@@ -96,11 +102,23 @@ interface Contact {
   group: string;
 }
 
+interface BrowserNotificationInstance {
+  instanceId: number;
+  notification: MessengerNotificationData;
+}
+
+let lastNotificationId = 0;
+
+function nextNotificationId() {
+  lastNotificationId = Math.max(Date.now(), lastNotificationId + 1);
+  return lastNotificationId;
+}
+
 function ContactActivity({ contact }: { contact: Contact }) {
   if (!contact.msg) return null;
 
   return (
-    <span className="relative -top-1 flex h-[18px] min-w-0 items-end gap-1.5 text-xs leading-4 italic text-[#7894a2]">
+    <span className="relative -top-1 flex h-[18px] w-full min-w-0 max-w-full items-end gap-1.5 overflow-hidden text-xs leading-4 italic text-[#7894a2]">
       {contact.musicSource && (
         <span
           className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center not-italic ${
@@ -140,7 +158,7 @@ function ContactActivity({ contact }: { contact: Contact }) {
           <MediaSourceIcon source={contact.musicSource} />
         </span>
       )}
-      <span className="truncate">{contact.msg}</span>
+      <span className="min-w-0 flex-1 truncate">{contact.msg}</span>
     </span>
   );
 }
@@ -652,8 +670,10 @@ function HomePage() {
     musicSource: "",
   });
   const realtimeSocketRef = useRef<Socket | null>(null);
-  const [browserNotification, setBrowserNotification] =
-    useState<MessengerNotificationData | null>(null);
+  const [browserNotifications, setBrowserNotifications] =
+    useState<BrowserNotificationInstance[]>([]);
+  const browserNotificationSequenceRef = useRef(0);
+  const browserNotificationTimersRef = useRef(new Set<number>());
   const [isLoadingContacts, setIsLoadingContacts] = useState(true);
   const [contactsError, setContactsError] = useState("");
   const [contactSearch, setContactSearch] = useState("");
@@ -669,6 +689,9 @@ function HomePage() {
   const settingsRef = useRef<HTMLDivElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [displayNameDraft, setDisplayNameDraft] = useState(() => user?.displayName ?? "");
+  const [avatarDraft, setAvatarDraft] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
+  const [isAvatarRemovalPending, setIsAvatarRemovalPending] = useState(false);
   const [profileFrameDraft, setProfileFrameDraft] = useState<ProfileFrame>(
     () => user?.profileFrame ?? "status",
   );
@@ -683,6 +706,7 @@ function HomePage() {
   const [passwordSettingsMessage, setPasswordSettingsMessage] = useState("");
   const [passwordSettingsError, setPasswordSettingsError] = useState("");
   const [isSavingProfileSettings, setIsSavingProfileSettings] = useState(false);
+  const [isPreparingProfileImage, setIsPreparingProfileImage] = useState(false);
   const [isSavingAppearance, setIsSavingAppearance] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [personalMessage, setPersonalMessage] = useState(
@@ -803,8 +827,49 @@ function HomePage() {
       });
       return;
     }
-    setBrowserNotification(notification);
+    browserNotificationSequenceRef.current += 1;
+    const instance: BrowserNotificationInstance = {
+      instanceId: browserNotificationSequenceRef.current,
+      notification,
+    };
+    setBrowserNotifications((current) => [...current, instance]);
+    const timer = window.setTimeout(() => {
+      browserNotificationTimersRef.current.delete(timer);
+      setBrowserNotifications((current) =>
+        current.filter((item) => item.instanceId !== instance.instanceId),
+      );
+    }, 5_000);
+    browserNotificationTimersRef.current.add(timer);
   }, []);
+
+  const playMessageNotificationSound = useCallback(() => {
+    const previousAudio = messageAudioRef.current;
+    previousAudio?.pause();
+
+    const audio = new Audio(messageSound);
+    audio.preload = "auto";
+    audio.volume = 1;
+    messageAudioRef.current = audio;
+
+    void audio.play().catch((error) => {
+      if (messageAudioRef.current === audio) {
+        console.error("Erro ao reproduzir notificação de mensagem:", error);
+      }
+    });
+  }, []);
+
+  const shouldShowMessageNotification = useCallback(async (conversationId: string) => {
+    if (!appWindow) return true;
+
+    try {
+      const conversationWindow = await WebviewWindow.getByLabel(`chat-${conversationId}`);
+      if (!conversationWindow) return true;
+      return await conversationWindow.isMinimized();
+    } catch (error) {
+      console.error("Erro ao verificar o estado da janela de conversa:", error);
+      return true;
+    }
+  }, [appWindow]);
 
   const notifyContactOnline = useCallback((contact: Contact) => {
     const now = Date.now();
@@ -813,7 +878,7 @@ function HomePage() {
     onlineNotificationTimesRef.current.set(contact.userId, now);
 
     showNotification({
-      id: now,
+      id: nextNotificationId(),
       contactId: contact.id,
       contactName: contact.name,
       avatarUrl: contact.avatarUrl,
@@ -833,14 +898,10 @@ function HomePage() {
     });
   }, [showNotification]);
 
-  useEffect(() => {
-    if (!browserNotification) return;
-    const notificationId = browserNotification.id;
-    const timer = window.setTimeout(() => {
-      setBrowserNotification((current) => current?.id === notificationId ? null : current);
-    }, 5_000);
-    return () => window.clearTimeout(timer);
-  }, [browserNotification]);
+  useEffect(() => () => {
+    browserNotificationTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    browserNotificationTimersRef.current.clear();
+  }, []);
 
   const openConversation = useCallback(async (contact: Contact, nudge = false) => {
     const chatParams = new URLSearchParams({
@@ -876,7 +937,7 @@ function HomePage() {
 
     new WebviewWindow(label, {
       url: `index.html#/chat/${contact.id}?${chatParams.toString()}`,
-      title: `Conversa com ${contact.name}`,
+      title: contact.name,
       width: 900,
       height: 640,
       resizable: true,
@@ -889,10 +950,38 @@ function HomePage() {
   }, [appWindow, navigate, user?.nameEffect, user?.profileFrame]);
 
   useEffect(() => {
+    if (!appWindow) return;
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<OpenConversationFromNotificationPayload>(
+      OPEN_CONVERSATION_FROM_NOTIFICATION_EVENT,
+      ({ payload }) => {
+        const contact = contatosRef.current.find(
+          (item) => item.id === payload.conversationId,
+        );
+        if (contact) void openConversation(contact);
+      },
+    ).then((stopListening) => {
+      if (disposed) stopListening();
+      else unlisten = stopListening;
+    }).catch((error) => {
+      console.error("Erro ao registrar clique da notificação:", error);
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [appWindow, openConversation]);
+
+  useEffect(() => {
     if (!user || isLoadingContacts) return;
     const socket = connectRealtime((encryptedMessage) => {
       const contact = contatosRef.current.find((item) => item.id === encryptedMessage.conversationId);
       if (!contact || encryptedMessage.senderUserId === user.id) return;
+      playMessageNotificationSound();
 
       void (async () => {
         let text = "Enviou uma mensagem.";
@@ -912,8 +1001,10 @@ function HomePage() {
           console.error("Não foi possível descriptografar a prévia da notificação:", error);
         }
 
+        if (!await shouldShowMessageNotification(contact.id)) return;
+
         showNotification({
-          id: Date.now(),
+          id: nextNotificationId(),
           contactId: contact.id,
           contactName: contact.name,
           avatarUrl: contact.avatarUrl,
@@ -923,11 +1014,6 @@ function HomePage() {
           kind: "message",
           text,
         });
-        const audio = messageAudioRef.current;
-        if (audio) {
-          audio.currentTime = 0;
-          void audio.play();
-        }
       })();
     }, (onlineUserIds) => {
       const online = new Set(onlineUserIds);
@@ -1070,7 +1156,15 @@ function HomePage() {
       realtimeSocketRef.current = null;
       socket?.disconnect();
     };
-  }, [isLoadingContacts, notifyContactOnline, openConversation, showNotification, user]);
+  }, [
+    isLoadingContacts,
+    notifyContactOnline,
+    openConversation,
+    playMessageNotificationSound,
+    shouldShowMessageNotification,
+    showNotification,
+    user,
+  ]);
 
   useEffect(() => {
     const profile = {
@@ -1145,7 +1239,14 @@ function HomePage() {
     void submitPersonalMessage(savePersonalMessage)();
   };
 
-  const saveDisplayName = async (event: FormEvent<HTMLFormElement>) => {
+  useEffect(
+    () => () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    },
+    [avatarPreviewUrl],
+  );
+
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const displayName = displayNameDraft.trim();
     setProfileSettingsMessage("");
@@ -1161,12 +1262,22 @@ function HomePage() {
 
     setIsSavingProfileSettings(true);
     try {
-      await updateProfile({ displayName });
+      if (isAvatarRemovalPending) {
+        await removeAvatar();
+      } else if (avatarDraft) {
+        await updateAvatar(avatarDraft);
+      }
+      if (displayName !== user?.displayName) {
+        await updateProfile({ displayName });
+      }
       setDisplayNameDraft(displayName);
-      setProfileSettingsMessage("Nome atualizado.");
+      setAvatarDraft(null);
+      setAvatarPreviewUrl("");
+      setIsAvatarRemovalPending(false);
+      setProfileSettingsMessage("Perfil atualizado.");
     } catch (error) {
       setProfileSettingsError(
-        error instanceof Error ? error.message : "Não foi possível atualizar o nome",
+        error instanceof Error ? error.message : "Não foi possível atualizar o perfil",
       );
     } finally {
       setIsSavingProfileSettings(false);
@@ -1196,35 +1307,30 @@ function HomePage() {
     if (!file) return;
     setProfileSettingsMessage("");
     setProfileSettingsError("");
-    setIsSavingProfileSettings(true);
+    setIsPreparingProfileImage(true);
     try {
       const avatar = await prepareProfileImage(file);
-      await updateAvatar(avatar);
-      setProfileSettingsMessage("Imagem de perfil atualizada.");
+      setAvatarDraft(avatar);
+      setAvatarPreviewUrl(URL.createObjectURL(avatar));
+      setIsAvatarRemovalPending(false);
+      setProfileSettingsMessage("Imagem selecionada. Salve o perfil para confirmar.");
     } catch (error) {
       setProfileSettingsError(
-        error instanceof Error ? error.message : "Não foi possível atualizar a imagem",
+        error instanceof Error ? error.message : "Não foi possível preparar a imagem",
       );
     } finally {
       if (avatarInputRef.current) avatarInputRef.current.value = "";
-      setIsSavingProfileSettings(false);
+      setIsPreparingProfileImage(false);
     }
   };
 
-  const removeProfileImage = async () => {
+  const removeProfileImage = () => {
     setProfileSettingsMessage("");
     setProfileSettingsError("");
-    setIsSavingProfileSettings(true);
-    try {
-      await removeAvatar();
-      setProfileSettingsMessage("Imagem de perfil removida.");
-    } catch (error) {
-      setProfileSettingsError(
-        error instanceof Error ? error.message : "Não foi possível remover a imagem",
-      );
-    } finally {
-      setIsSavingProfileSettings(false);
-    }
+    setAvatarDraft(null);
+    setAvatarPreviewUrl("");
+    setIsAvatarRemovalPending(true);
+    setProfileSettingsMessage("A imagem será removida ao salvar o perfil.");
   };
 
   const savePassword = async (event: FormEvent<HTMLFormElement>) => {
@@ -1461,14 +1567,8 @@ function HomePage() {
   }, []);
 
   useEffect(() => {
-    const audio = new Audio(messageSound);
-    audio.preload = "auto";
-    audio.volume = 1;
-    audio.load();
-    messageAudioRef.current = audio;
-
     return () => {
-      audio.pause();
+      messageAudioRef.current?.pause();
       messageAudioRef.current = null;
     };
   }, []);
@@ -1484,6 +1584,11 @@ function HomePage() {
   // 3. Configuração visual e lógica das abas
   const tabsConfig = [
     {
+      id: "geral",
+      label: "Contatos",
+      icon: <MdOutlineContacts size={18} />,
+    },
+    {
       id: "online",
       label: "Online",
       icon: <MdPersonOutline size={18} />,
@@ -1492,11 +1597,6 @@ function HomePage() {
       id: "offlines",
       label: "Offline",
       icon: <MdOutlinePersonOff size={18} />,
-    },
-    {
-      id: "geral",
-      label: "Contatos",
-      icon: <MdOutlineContacts size={18} />,
     },
     { id: "grupos", label: "Grupos", icon: <MdOutlineGroups size={18} /> },
   ];
@@ -1546,9 +1646,9 @@ function HomePage() {
           data-tauri-drag-region
           className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
         >
-          <span className="flex items-end" aria-hidden="true">
-            <span className="h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
-            <span className="-ml-1 h-3 w-3 rounded-full bg-[#43a9d7] ring-1 ring-white" />
+          <span className="flex items-center" aria-hidden="true">
+            <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
+            <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
           </span>
           <span
             data-tauri-drag-region
@@ -1584,7 +1684,7 @@ function HomePage() {
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
       {/* 1. SEÇÃO DO SEU PERFIL (MANTIDA NO TOPO) */}
       <aside className="relative flex flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-gradient-to-br from-white/90 via-[#edf8fc]/90 to-[#cce7f2]/90 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.16)]">
         <div
@@ -1600,8 +1700,12 @@ function HomePage() {
             onClick={() => {
               if (!isSettingsOpen) {
                 setDisplayNameDraft(user?.displayName ?? "");
+                setAvatarDraft(null);
+                setAvatarPreviewUrl("");
+                setIsAvatarRemovalPending(false);
                 setProfileFrameDraft(user?.profileFrame ?? "status");
                 setNameEffectDraft(user?.nameEffect ?? "default");
+                if (avatarInputRef.current) avatarInputRef.current.value = "";
               }
               setIsSettingsOpen((isOpen) => !isOpen);
             }}
@@ -1646,7 +1750,13 @@ function HomePage() {
 
                 <div className="flex items-center gap-3 rounded-lg border border-white/80 bg-white/55 p-3">
                   <PictureFrame
-                    imageSrc={resolveApiAssetUrl(user?.avatarUrl) || undefined}
+                    imageSrc={
+                      isAvatarRemovalPending
+                        ? undefined
+                        : avatarPreviewUrl ||
+                          resolveApiAssetUrl(user?.avatarUrl) ||
+                          undefined
+                    }
                     imageAlt="Minha imagem de perfil"
                     displayName={user?.displayName}
                     imageSize={58}
@@ -1663,18 +1773,18 @@ function HomePage() {
                     />
                     <button
                       type="button"
-                      disabled={isSavingProfileSettings}
+                      disabled={isSavingProfileSettings || isPreparingProfileImage}
                       onClick={() => avatarInputRef.current?.click()}
                       className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#79a9bf] bg-gradient-to-b from-white to-[#e5f3f9] px-2 py-1.5 text-[11px] font-semibold text-[#315f77] shadow-sm transition hover:border-[#4b97b9] hover:from-white hover:to-[#d7edf6] disabled:cursor-wait disabled:opacity-60"
                     >
                       <MdOutlinePhotoCamera aria-hidden="true" size={16} />
-                      Escolher imagem
+                      {isPreparingProfileImage ? "Preparando..." : "Escolher imagem"}
                     </button>
-                    {user?.avatarUrl && (
+                    {(user?.avatarUrl || avatarDraft) && !isAvatarRemovalPending && (
                       <button
                         type="button"
-                        disabled={isSavingProfileSettings}
-                        onClick={() => void removeProfileImage()}
+                        disabled={isSavingProfileSettings || isPreparingProfileImage}
+                        onClick={removeProfileImage}
                         className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-[#6e8998] transition hover:bg-white/70 hover:text-[#b14c4c] disabled:cursor-wait disabled:opacity-60"
                       >
                         <MdOutlineDelete aria-hidden="true" size={15} />
@@ -1684,7 +1794,7 @@ function HomePage() {
                   </div>
                 </div>
 
-                <form onSubmit={saveDisplayName} className="space-y-2">
+                <form onSubmit={saveProfile} className="space-y-2">
                   <label className="block text-[11px] font-semibold text-[#52758a]">
                     Nome de exibição
                     <input
@@ -1698,10 +1808,16 @@ function HomePage() {
                   </label>
                   <button
                     type="submit"
-                    disabled={isSavingProfileSettings || displayNameDraft.trim() === user?.displayName}
+                    disabled={
+                      isSavingProfileSettings ||
+                      isPreparingProfileImage ||
+                      (displayNameDraft.trim() === user?.displayName &&
+                        !avatarDraft &&
+                        !isAvatarRemovalPending)
+                    }
                     className="w-full cursor-pointer rounded-md border border-[#3989b1] bg-gradient-to-b from-[#54add2] to-[#2788b4] px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:from-[#65b8d9] hover:to-[#217da7] disabled:cursor-default disabled:opacity-50"
                   >
-                    {isSavingProfileSettings ? "Salvando..." : "Salvar nome"}
+                    {isSavingProfileSettings ? "Salvando..." : "Salvar perfil"}
                   </button>
                 </form>
 
@@ -1963,7 +2079,7 @@ function HomePage() {
             <div className="flex flex-col">
               <div className="flex flex-row items-center gap-2 pr-9">
                 <span
-                  className={`h-3 w-3 rounded-full border border-white shadow-sm ${STATUS_CONFIG[status].color}`}
+                  className={`h-3 w-3 shrink-0 rounded-full border border-white shadow-sm ${STATUS_CONFIG[status].color}`}
                 />
 
                 <span
@@ -2234,14 +2350,21 @@ function HomePage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-row gap-3">
         {/* 2. COLUNA DE CONTATOS (SE ADAPTA AUTOMATICAMENTE) */}
         <section
-          className="flex h-full flex-1 flex-col gap-3 rounded-[12px] border border-[#8fb2c3] bg-white/70 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)] transition-all duration-300"
+          className="flex h-full min-w-0 max-w-full flex-1 flex-col gap-3 overflow-hidden rounded-[12px] border border-[#8fb2c3] bg-white/70 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)] transition-all duration-300"
         >
           {/* Input de busca mantido no topo */}
-          <Input
-            inputName="Buscar contato"
-            value={contactSearch}
-            onChange={(event) => setContactSearch(event.currentTarget.value)}
-          />
+          <div className="group relative [&_input]:pr-10">
+            <Input
+              inputName="Buscar contato"
+              value={contactSearch}
+              onChange={(event) => setContactSearch(event.currentTarget.value)}
+            />
+            <MdSearch
+              aria-hidden="true"
+              size={19}
+              className="pointer-events-none absolute bottom-[11px] right-3 text-[#67899a] transition-colors duration-200 group-hover:text-[#328db7] group-focus-within:text-[#328db7]"
+            />
+          </div>
 
           {/* BARRA DE ABAS (TABS) */}
           <div className="border-b border-[#b9d3df]">
@@ -2278,7 +2401,7 @@ function HomePage() {
           </div>
 
           {/* LISTAGEM DE CONTATOS FILTRADA COM SCROLL INTERNO */}
-          <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-x-hidden overflow-y-auto pr-1">
             {isLoadingContacts && (
               <p className="py-4 text-center text-xs italic text-[#7894a2]">Carregando contatos...</p>
             )}
@@ -2298,7 +2421,7 @@ function HomePage() {
                   <div
                     key={contato.id}
                     onDoubleClick={() => handleContactClick(contato)} // 👈 GATILHO DE JANELA (ABAS GERAIS)
-                    className="flex cursor-pointer select-none flex-row items-center gap-3 rounded-[8px] border border-transparent p-1.5 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
+                    className="flex min-w-0 max-w-full cursor-pointer select-none flex-row items-center gap-3 overflow-hidden rounded-[8px] border border-transparent p-1.5 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
                   >
                     <ContactStatusFrame contact={contato} />
                     {/* Informações do Contato */}
@@ -2308,7 +2431,7 @@ function HomePage() {
                       }`}
                     >
                       <span
-                        className={`relative -top-px text-sm font-medium leading-[18px] ${contato.status === "offline" ? "text-[#91a5af]" : "text-[#31556a]"}`}
+                        className={`relative -top-px block min-w-0 max-w-full truncate text-sm font-medium leading-[18px] ${contato.status === "offline" ? "text-[#91a5af]" : "text-[#31556a]"}`}
                       >
                         {contato.name}
                       </span>
@@ -2322,7 +2445,7 @@ function HomePage() {
                     (c) => c.group === grupoName,
                   );
                   return (
-                    <div key={grupoName} className="mb-2">
+                    <div key={grupoName} className="mb-2 min-w-0 max-w-full overflow-hidden">
                       <h4 className="mb-1 rounded-md border border-white/75 bg-gradient-to-r from-[#dceef6] to-white/60 px-2 py-1 text-xs font-semibold text-[#52758a]">
                         {grupoName} ({contatosDoGrupo.length})
                       </h4>
@@ -2330,7 +2453,7 @@ function HomePage() {
                         // O callback só lê statusRef quando o evento ocorre; o analisador o segue como se fosse render.
                         // eslint-disable-next-line react-hooks/refs
                         <div key={contato.id} onDoubleClick={() => handleContactClick(contato)}
-                          className="flex cursor-pointer select-none flex-row items-center gap-3 rounded-[8px] border border-transparent p-1.5 pl-4 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
+                          className="flex min-w-0 max-w-full cursor-pointer select-none flex-row items-center gap-3 overflow-hidden rounded-[8px] border border-transparent p-1.5 pl-4 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
                         >
                           <ContactStatusFrame contact={contato} />
                           <div
@@ -2339,7 +2462,7 @@ function HomePage() {
                             }`}
                           >
                             <span
-                              className={`relative -top-px text-sm font-medium leading-[18px] ${contato.status === "offline" ? "text-[#91a5af]" : "text-[#31556a]"}`}
+                              className={`relative -top-px block min-w-0 max-w-full truncate text-sm font-medium leading-[18px] ${contato.status === "offline" ? "text-[#91a5af]" : "text-[#31556a]"}`}
                             >
                               {contato.name}
                             </span>
@@ -2374,12 +2497,26 @@ function HomePage() {
         </div>
       </div>
 
-      {browserNotification && (
-        <div className="fixed bottom-4 right-4 z-[100]">
-          <MessengerNotification
-            notification={browserNotification}
-            onClose={() => setBrowserNotification(null)}
-          />
+      {browserNotifications.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-1.5">
+          {browserNotifications.map(({ instanceId, notification }) => (
+            <MessengerNotification
+              key={instanceId}
+              notification={notification}
+              onClose={() => setBrowserNotifications((current) =>
+                current.filter((item) => item.instanceId !== instanceId),
+              )}
+              onActivate={() => {
+                const contact = contatosRef.current.find(
+                  (item) => item.id === notification.contactId,
+                );
+                setBrowserNotifications((current) =>
+                  current.filter((item) => item.instanceId !== instanceId),
+                );
+                if (contact) void openConversation(contact);
+              }}
+            />
+          ))}
         </div>
       )}
     </main>

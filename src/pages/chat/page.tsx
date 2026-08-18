@@ -97,7 +97,161 @@ import Dark20Icon from "../../assets/images/emoticons/dark/20.jpg";
 import Dark21Icon from "../../assets/images/emoticons/dark/21.jpg";
 import Dark22Icon from "../../assets/images/emoticons/dark/22.jpg";
 import Dark27Icon from "../../assets/images/emoticons/dark/27.jpg";
+import OnionHeadBoredomIcon from "../../assets/images/emoticons/onion-head/boredomplz.gif";
+import OnionHeadNosePickingIcon from "../../assets/images/emoticons/onion-head/nosepickingplz.gif";
+import OnionHeadCanLoveIcon from "../../assets/images/emoticons/onion-head/canloveplz.gif";
+import OnionHeadChocoLoveIcon from "../../assets/images/emoticons/onion-head/chocoloveplz.gif";
+import OnionHeadFeelingFullIcon from "../../assets/images/emoticons/onion-head/feelingfullplz.gif";
+import OnionHeadNomNomIcon from "../../assets/images/emoticons/onion-head/onionnomnomplz.gif";
+import OnionHeadNomIcon from "../../assets/images/emoticons/onion-head/onionnomplz.gif";
+import OnionHeadTeaTimeIcon from "../../assets/images/emoticons/onion-head/teatimeplz.gif";
+import OnionHeadByeIcon from "../../assets/images/emoticons/onion-head/baibaiplz.gif";
+import OnionHeadHiIcon from "../../assets/images/emoticons/onion-head/sayhiplz.gif";
+import OnionHeadHappyIcon from "../../assets/images/emoticons/onion-head/aboishappyplz.gif";
+import OnionHeadAwwwIcon from "../../assets/images/emoticons/onion-head/awwwplz.gif";
+import OnionHeadDandyIcon from "../../assets/images/emoticons/onion-head/dandyonionplz.gif";
+import OnionHeadDignityLaughIcon from "../../assets/images/emoticons/onion-head/dignitylaughplz.gif";
+import OnionHeadExcitedBlushIcon from "../../assets/images/emoticons/onion-head/excitedblushplz.gif";
+import OnionHeadFinallyIcon from "../../assets/images/emoticons/onion-head/finallyplz.gif";
+import OnionHeadGreatJobIcon from "../../assets/images/emoticons/onion-head/greatjobplz.gif";
+import OnionHeadHappyTearsIcon from "../../assets/images/emoticons/onion-head/happytearsplz.gif";
+import OnionHeadHeavenlyIcon from "../../assets/images/emoticons/onion-head/heavenlyplz.gif";
+import OnionHeadHeeHeeIcon from "../../assets/images/emoticons/onion-head/heehee-plz.gif";
+import OnionHeadLaughing2Icon from "../../assets/images/emoticons/onion-head/laughing2plz.gif";
+import OnionHeadLaughingIcon from "../../assets/images/emoticons/onion-head/laughingplz.gif";
+import OnionHeadBegIcon from "../../assets/images/emoticons/onion-head/onibeg.gif";
+import OnionHeadFlowerCheerIcon from "../../assets/images/emoticons/onion-head/onicheer.gif";
+import OnionHeadGaspIcon from "../../assets/images/emoticons/onion-head/onigaspplz.gif";
+import OnionHeadGirlBegIcon from "../../assets/images/emoticons/onion-head/onigirlbeg.gif";
+import OnionHeadAngelIcon from "../../assets/images/emoticons/onion-head/onionangelplz.gif";
+import OnionHeadAustriaIcon from "../../assets/images/emoticons/onion-head/onionaustriaplz.gif";
+import OnionHeadCheer2Icon from "../../assets/images/emoticons/onion-head/onioncheer2plz.gif";
+import OnionHeadCheerIcon from "../../assets/images/emoticons/onion-head/onioncheerplz.gif";
+import OnionHeadCleanIcon from "../../assets/images/emoticons/onion-head/onioncleanplz.gif";
+import OnionHeadHarpIcon from "../../assets/images/emoticons/onion-head/onionharpplz.gif";
+import OnionHeadOnionIcon from "../../assets/images/emoticons/onion-head/oniononionplz.gif";
+import OnionHeadX3Icon from "../../assets/images/emoticons/onion-head/onionx3plz.gif";
+import OnionHeadRanranruuIcon from "../../assets/images/emoticons/onion-head/ranranruuplz.gif";
+import OnionHeadRelievedIcon from "../../assets/images/emoticons/onion-head/relievedplz.gif";
+import OnionHeadVictoryIcon from "../../assets/images/emoticons/onion-head/yesvictoryplz.gif";
+import OnionHeadChristmas1Icon from "../../assets/images/emoticons/onion-head/onimerrychristmas1.gif";
+import OnionHeadChristmas2Icon from "../../assets/images/emoticons/onion-head/onimerrychristmas2.gif";
+import OnionHeadChristmas3Icon from "../../assets/images/emoticons/onion-head/onimerrychristmas3.gif";
+import OnionHeadChristmas4Icon from "../../assets/images/emoticons/onion-head/onimerrychristmas4.gif";
+import OnionHeadColdIcon from "../../assets/images/emoticons/onion-head/itscoldplz.gif";
+import OnionHeadFreezingIcon from "../../assets/images/emoticons/onion-head/itsfreezingplz.gif";
+import OnionHeadSweatIcon from "../../assets/images/emoticons/onion-head/onisweatplz.gif";
+import OnionHeadBloodDeathIcon from "../../assets/images/emoticons/onion-head/blooddeathplz.gif";
+import OnionHeadDizzyIcon from "../../assets/images/emoticons/onion-head/dizzyplz.gif";
+import OnionHeadDotDotDotIcon from "../../assets/images/emoticons/onion-head/dotdotdotzplz.gif";
+import OnionHeadGivingUpIcon from "../../assets/images/emoticons/onion-head/givingupplz.gif";
+import OnionHeadHomelessIcon from "../../assets/images/emoticons/onion-head/homelessonionplz.gif";
+import OnionHeadImDeadIcon from "../../assets/images/emoticons/onion-head/imdeadplz.gif";
+import OnionHeadInjuredIcon from "../../assets/images/emoticons/onion-head/injuredplz.gif";
+import OnionHeadHotIcon from "../../assets/images/emoticons/onion-head/itshotplz.gif";
+import OnionHeadLaunchedIcon from "../../assets/images/emoticons/onion-head/launchedplz.jpg";
+import OnionHeadAccidentIcon from "../../assets/images/emoticons/onion-head/onionaccidentplz.gif";
+import OnionHeadFailIcon from "../../assets/images/emoticons/onion-head/onionfailplz.gif";
+import OnionHeadXdIcon from "../../assets/images/emoticons/onion-head/onionxdplz.gif";
+import OnionHeadSoakedIcon from "../../assets/images/emoticons/onion-head/onisoaked.gif";
+import OnionHeadStressIcon from "../../assets/images/emoticons/onion-head/onistressplz.gif";
+import OnionHeadScaredToDeathIcon from "../../assets/images/emoticons/onion-head/scaredtodeathplz.gif";
+import OnionHeadSickIcon from "../../assets/images/emoticons/onion-head/sickplz.gif";
+import OnionHeadTooLoudIcon from "../../assets/images/emoticons/onion-head/tooloudplz.gif";
+import OnionHeadVomitIcon from "../../assets/images/emoticons/onion-head/vomitplz.gif";
+import OnionHeadAdorableIcon from "../../assets/images/emoticons/onion-head/adorableplz.gif";
+import OnionHeadArigatouIcon from "../../assets/images/emoticons/onion-head/arigatouplz.gif";
+import OnionHeadBlshIcon from "../../assets/images/emoticons/onion-head/blshplz.gif";
+import OnionHeadBlushIcon from "../../assets/images/emoticons/onion-head/blushplz.gif";
+import OnionHeadCBlushIcon from "../../assets/images/emoticons/onion-head/cblushplz.gif";
+import OnionHeadDingDingDingIcon from "../../assets/images/emoticons/onion-head/dingdingdingplz.gif";
+import OnionHeadEmbarrassedIcon from "../../assets/images/emoticons/onion-head/embarrasedplz.gif";
+import OnionHeadHappyHappyIcon from "../../assets/images/emoticons/onion-head/happyhappyplz.gif";
+import OnionHeadInLoveIcon from "../../assets/images/emoticons/onion-head/inloveplz.gif";
+import OnionHeadLoveLoveIcon from "../../assets/images/emoticons/onion-head/loveloveplz.gif";
+import OnionHeadLvLvIcon from "../../assets/images/emoticons/onion-head/lvlvplz.gif";
+import OnionHeadNoseBleedingIcon from "../../assets/images/emoticons/onion-head/nosebleedingplz.gif";
+import OnionHeadBunnyIcon from "../../assets/images/emoticons/onion-head/onionbunnyplz.gif";
+import OnionHeadShiningEyesIcon from "../../assets/images/emoticons/onion-head/shining-eyesplz.gif";
+import OnionHeadSoBeautifulIcon from "../../assets/images/emoticons/onion-head/sobeautifulplz.gif";
+import OnionHeadUhuIcon from "../../assets/images/emoticons/onion-head/uhuplz.gif";
+import OnionHeadAwwTearsIcon from "../../assets/images/emoticons/onion-head/awwtearsplz.png";
+import OnionHeadBadBowIcon from "../../assets/images/emoticons/onion-head/badbowplz.gif";
+import OnionHeadBeggingIcon from "../../assets/images/emoticons/onion-head/begplz.gif";
+import OnionHeadDustingIcon from "../../assets/images/emoticons/onion-head/dustingplz.gif";
+import OnionHeadGameAddictIcon from "../../assets/images/emoticons/onion-head/gameaddictplz.gif";
+import OnionHeadHauntYouIcon from "../../assets/images/emoticons/onion-head/onihauntyou.gif";
+import OnionHeadDesuIcon from "../../assets/images/emoticons/onion-head/oniondesuplz.gif";
+import OnionHeadPinnochioIcon from "../../assets/images/emoticons/onion-head/onionpinnochioplz.gif";
+import OnionHeadShowerIcon from "../../assets/images/emoticons/onion-head/onishowerplz.gif";
+import OnionHeadRedPassIcon from "../../assets/images/emoticons/onion-head/redpassplz.gif";
+import OnionHeadRobotFaceIcon from "../../assets/images/emoticons/onion-head/robotfaceplz.gif";
+import OnionHeadYellowCardIcon from "../../assets/images/emoticons/onion-head/yellowcardplz2.gif";
+import OnionHeadDrumIcon from "../../assets/images/emoticons/onion-head/oniondrum.gif";
+import OnionHeadRockingIcon from "../../assets/images/emoticons/onion-head/rockingonionplz.gif";
+import OnionHeadWhistleIcon from "../../assets/images/emoticons/onion-head/whistleplz.gif";
+import OnionHeadAllAloneIcon from "../../assets/images/emoticons/onion-head/allaloneplz.gif";
+import OnionHeadAloneIcon from "../../assets/images/emoticons/onion-head/aloneplz.gif";
+import OnionHeadComeBackIcon from "../../assets/images/emoticons/onion-head/comebackplz.gif";
+import OnionHeadCryCryIcon from "../../assets/images/emoticons/onion-head/crycryplz.gif";
+import OnionHeadDepressedIcon from "../../assets/images/emoticons/onion-head/depressedonionplz.gif";
+import OnionHeadMiseryIcon from "../../assets/images/emoticons/onion-head/miseryplz.gif";
+import OnionHeadTantrumIcon from "../../assets/images/emoticons/onion-head/oniontantrumplz.gif";
+import OnionHeadTortureIcon from "../../assets/images/emoticons/onion-head/oniontortureplz.gif";
+import OnionHeadWoeIcon from "../../assets/images/emoticons/onion-head/onionwoeplz.gif";
+import OnionHeadOrzIcon from "../../assets/images/emoticons/onion-head/orzplz.gif";
+import OnionHeadRunCryIcon from "../../assets/images/emoticons/onion-head/runcryplz.gif";
+import OnionHeadSadnessIcon from "../../assets/images/emoticons/onion-head/sadnessplz.gif";
+import OnionHeadScaredIcon from "../../assets/images/emoticons/onion-head/scaredplz.gif";
+import OnionHeadSighingIcon from "../../assets/images/emoticons/onion-head/sighingplz.gif";
+import OnionHeadSobSobSobIcon from "../../assets/images/emoticons/onion-head/sobsobsobplz.gif";
+import OnionHeadSweatdropIcon from "../../assets/images/emoticons/onion-head/sweatdropplz.gif";
+import OnionHeadLazyIcon from "../../assets/images/emoticons/onion-head/lazyonion.gif";
+import OnionHeadLullabyIcon from "../../assets/images/emoticons/onion-head/onionlullabyplz.gif";
+import OnionHeadTiredIcon from "../../assets/images/emoticons/onion-head/onitiredplz.gif";
+import OnionHeadSaunaRelaxIcon from "../../assets/images/emoticons/onion-head/saunarelaxplz.gif";
+import OnionHeadWarmAndComfyIcon from "../../assets/images/emoticons/onion-head/warmandcomfyplz.gif";
+import OnionHeadComeOverHereIcon from "../../assets/images/emoticons/onion-head/comeoverhereplz.gif";
+import OnionHeadCreepyIcon from "../../assets/images/emoticons/onion-head/creepyonionplz.gif";
+import OnionHeadGuaahIcon from "../../assets/images/emoticons/onion-head/guaahplz.gif";
+import OnionHeadHypnoIcon from "../../assets/images/emoticons/onion-head/onihypnoplz.gif";
+import OnionHeadPlanningIcon from "../../assets/images/emoticons/onion-head/planningplz.gif";
+import OnionHeadGraduatingIcon from "../../assets/images/emoticons/onion-head/graduatingplz.gif";
+import OnionHeadISeeIcon from "../../assets/images/emoticons/onion-head/iseeplz.gif";
+import OnionHeadBusIcon from "../../assets/images/emoticons/onion-head/onionbusplz.gif";
+import OnionHeadRightYouAreIcon from "../../assets/images/emoticons/onion-head/rightyouareplz.gif";
+import OnionHeadSchoolIcon from "../../assets/images/emoticons/onion-head/schoolplz.gif";
+import OnionHeadSmartyIcon from "../../assets/images/emoticons/onion-head/smartyplz.gif";
+import OnionHeadStudyTimeIcon from "../../assets/images/emoticons/onion-head/studytimeplz.gif";
+import OnionHeadThatsRightIcon from "../../assets/images/emoticons/onion-head/thatsrightplz.gif";
+import OnionHeadAwkwardIcon from "../../assets/images/emoticons/onion-head/awkwardplz.gif";
+import OnionHeadCuriosityIcon from "../../assets/images/emoticons/onion-head/curiosityplz.gif";
+import OnionHeadDontUnderstandIcon from "../../assets/images/emoticons/onion-head/dontunderstandplz.gif";
+import OnionHeadNyoronIcon from "../../assets/images/emoticons/onion-head/nyorononionplz.gif";
+import OnionHeadOmgNoesIcon from "../../assets/images/emoticons/onion-head/omgnoesplz.gif";
+import OnionHeadOmgWtfBbqIcon from "../../assets/images/emoticons/onion-head/omgwtfbbqplz.gif";
+import OnionHeadFacepalmIcon from "../../assets/images/emoticons/onion-head/onionfacepalmplz.gif";
+import OnionHeadOmfgIcon from "../../assets/images/emoticons/onion-head/onionomfgplz.gif";
+import OnionHeadPanicIcon from "../../assets/images/emoticons/onion-head/onionpanicplz.gif";
+import OnionHeadSpitTake1Icon from "../../assets/images/emoticons/onion-head/onionspittake1plz.gif";
+import OnionHeadSpitTake2Icon from "../../assets/images/emoticons/onion-head/onionspittake2plz.gif";
+import OnionHeadPetrifiedIcon from "../../assets/images/emoticons/onion-head/petrifiedplz.gif";
+import OnionHeadRejectedIcon from "../../assets/images/emoticons/onion-head/rejectedplz.gif";
+import OnionHeadShockIcon from "../../assets/images/emoticons/onion-head/shockplz.gif";
+import OnionHeadChaseIcon from "../../assets/images/emoticons/onion-head/chase-plz.gif";
+import OnionHeadDestroyIcon from "../../assets/images/emoticons/onion-head/destroyplz.gif";
+import OnionHeadHeadacheIcon from "../../assets/images/emoticons/onion-head/headacheplz.gif";
+import OnionHeadImmaKillYouIcon from "../../assets/images/emoticons/onion-head/immakillyouplz.gif";
 import OnionHeadInsultedIcon from "../../assets/images/emoticons/onion-head/insultedplz.gif";
+import OnionHeadKyleIcon from "../../assets/images/emoticons/onion-head/kyleoniplz.gif";
+import OnionHeadNotListeningIcon from "../../assets/images/emoticons/onion-head/notlisteningplz.gif";
+import OnionHeadNoIcon from "../../assets/images/emoticons/onion-head/onionnouplz.gif";
+import OnionHeadPunchIcon from "../../assets/images/emoticons/onion-head/punch1plz.gif";
+import OnionHeadRocketPunchIcon from "../../assets/images/emoticons/onion-head/rocketpunchplz.gif";
+import OnionHeadRunIcon from "../../assets/images/emoticons/onion-head/runrunrunplz.gif";
+import OnionHeadSaiyanIcon from "../../assets/images/emoticons/onion-head/saiyanplz.gif";
+import OnionHeadVoodooIcon from "../../assets/images/emoticons/onion-head/voodooplz.gif";
+import OnionHeadWatchItIcon from "../../assets/images/emoticons/onion-head/watchitplz.gif";
 import OnionHeadComeAtMeIcon from "../../assets/images/emoticons/onion-head/comeatmeplz.gif";
 import OnionHeadHandsomeIcon from "../../assets/images/emoticons/onion-head/handsomeonionplz.gif";
 import OnionHeadHeroTimeIcon from "../../assets/images/emoticons/onion-head/herotimeplz.gif";
@@ -170,9 +324,933 @@ const ONION_HEAD_DISPLAY_SIZE = {
 
 const ONION_HEAD_EMOTICONS = [
   {
+    code: "(onionboredom)",
+    src: OnionHeadBoredomIcon,
+    alt: "Onion Head entediado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionnosepicking)",
+    src: OnionHeadNosePickingIcon,
+    alt: "Onion Head cutucando o nariz",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncanlove)",
+    src: OnionHeadCanLoveIcon,
+    alt: "Onion Head apaixonado por refrigerante",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionchocolove)",
+    src: OnionHeadChocoLoveIcon,
+    alt: "Onion Head apaixonado por chocolate",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionfull)",
+    src: OnionHeadFeelingFullIcon,
+    alt: "Onion Head satisfeito",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionnomnom)",
+    src: OnionHeadNomNomIcon,
+    alt: "Onion Head comendo peixe",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionnom)",
+    src: OnionHeadNomIcon,
+    alt: "Onion Head com fome",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionteatime)",
+    src: OnionHeadTeaTimeIcon,
+    alt: "Onion Head tomando chá",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionbye)",
+    src: OnionHeadByeIcon,
+    alt: "Onion Head dizendo tchau",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhi)",
+    src: OnionHeadHiIcon,
+    alt: "Onion Head dizendo oi",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhappy)",
+    src: OnionHeadHappyIcon,
+    alt: "Onion Head feliz",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionawww)",
+    src: OnionHeadAwwwIcon,
+    alt: "Onion Head emocionado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondandy)",
+    src: OnionHeadDandyIcon,
+    alt: "Onion Head elegante",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondignitylaugh)",
+    src: OnionHeadDignityLaughIcon,
+    alt: "Onion Head rindo com dignidade",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionexcitedblush)",
+    src: OnionHeadExcitedBlushIcon,
+    alt: "Onion Head animado e corado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionfinally)",
+    src: OnionHeadFinallyIcon,
+    alt: "Onion Head dizendo finalmente",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniongreatjob)",
+    src: OnionHeadGreatJobIcon,
+    alt: "Onion Head parabenizando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhappytears)",
+    src: OnionHeadHappyTearsIcon,
+    alt: "Onion Head chorando de alegria",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionheavenly)",
+    src: OnionHeadHeavenlyIcon,
+    alt: "Onion Head nas nuvens",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionheehee)",
+    src: OnionHeadHeeHeeIcon,
+    alt: "Onion Head sorrindo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionlaughing2)",
+    src: OnionHeadLaughing2Icon,
+    alt: "Onion Head dando risada",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionlaughing)",
+    src: OnionHeadLaughingIcon,
+    alt: "Onion Head rindo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionbeg)",
+    src: OnionHeadBegIcon,
+    alt: "Onion Head implorando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionflowercheer)",
+    src: OnionHeadFlowerCheerIcon,
+    alt: "Onion Head comemorando com uma flor",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniongasp)",
+    src: OnionHeadGaspIcon,
+    alt: "Onion Head admirado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniongirlbeg)",
+    src: OnionHeadGirlBegIcon,
+    alt: "Onion Head garota implorando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionangel)",
+    src: OnionHeadAngelIcon,
+    alt: "Onion Head anjo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionaustria)",
+    src: OnionHeadAustriaIcon,
+    alt: "Onion Head austríaco",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncheer2)",
+    src: OnionHeadCheer2Icon,
+    alt: "Onion Head comemorando para a esquerda",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncheer)",
+    src: OnionHeadCheerIcon,
+    alt: "Onion Head comemorando para a direita",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionclean)",
+    src: OnionHeadCleanIcon,
+    alt: "Onion Head limpando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionharp)",
+    src: OnionHeadHarpIcon,
+    alt: "Onion Head tocando harpa",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniononion)",
+    src: OnionHeadOnionIcon,
+    alt: "Onion Head segurando cebolinhas",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionx3)",
+    src: OnionHeadX3Icon,
+    alt: "Onion Head fazendo careta feliz",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionranranruu)",
+    src: OnionHeadRanranruuIcon,
+    alt: "Onion Head dançando ran ran ruu",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrelieved)",
+    src: OnionHeadRelievedIcon,
+    alt: "Onion Head aliviado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionvictory)",
+    src: OnionHeadVictoryIcon,
+    alt: "Onion Head celebrando a vitória",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionchristmas1)",
+    src: OnionHeadChristmas1Icon,
+    alt: "Onion Head feliz Natal 1",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionchristmas2)",
+    src: OnionHeadChristmas2Icon,
+    alt: "Onion Head feliz Natal 2",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionchristmas3)",
+    src: OnionHeadChristmas3Icon,
+    alt: "Onion Head feliz Natal 3",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionchristmas4)",
+    src: OnionHeadChristmas4Icon,
+    alt: "Onion Head feliz Natal 4",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncold)",
+    src: OnionHeadColdIcon,
+    alt: "Onion Head com frio",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionfreezing)",
+    src: OnionHeadFreezingIcon,
+    alt: "Onion Head congelando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsweat)",
+    src: OnionHeadSweatIcon,
+    alt: "Onion Head suando de calor",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionblooddeath)",
+    src: OnionHeadBloodDeathIcon,
+    alt: "Onion Head morto e ensanguentado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondizzy)",
+    src: OnionHeadDizzyIcon,
+    alt: "Onion Head tonto",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondotdotdot)",
+    src: OnionHeadDotDotDotIcon,
+    alt: "Onion Head sem palavras",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniongivingup)",
+    src: OnionHeadGivingUpIcon,
+    alt: "Onion Head desistindo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhomeless)",
+    src: OnionHeadHomelessIcon,
+    alt: "Onion Head desabrigado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionimdead)",
+    src: OnionHeadImDeadIcon,
+    alt: "Onion Head dizendo que morreu",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioninjured)",
+    src: OnionHeadInjuredIcon,
+    alt: "Onion Head machucado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhot)",
+    src: OnionHeadHotIcon,
+    alt: "Onion Head com calor",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionlaunched)",
+    src: OnionHeadLaunchedIcon,
+    alt: "Onion Head sendo lançado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionaccident)",
+    src: OnionHeadAccidentIcon,
+    alt: "Onion Head acidentado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionfail)",
+    src: OnionHeadFailIcon,
+    alt: "Onion Head fracassando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionxd)",
+    src: OnionHeadXdIcon,
+    alt: "Onion Head rindo XD",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsoaked)",
+    src: OnionHeadSoakedIcon,
+    alt: "Onion Head encharcado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionstress)",
+    src: OnionHeadStressIcon,
+    alt: "Onion Head estressado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionscaredtodeath)",
+    src: OnionHeadScaredToDeathIcon,
+    alt: "Onion Head morrendo de medo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsick)",
+    src: OnionHeadSickIcon,
+    alt: "Onion Head doente",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniontooloud)",
+    src: OnionHeadTooLoudIcon,
+    alt: "Onion Head incomodado com barulho",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionvomit)",
+    src: OnionHeadVomitIcon,
+    alt: "Onion Head vomitando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionadorable)",
+    src: OnionHeadAdorableIcon,
+    alt: "Onion Head achando adorável",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionarigatou)",
+    src: OnionHeadArigatouIcon,
+    alt: "Onion Head agradecendo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionblsh)",
+    src: OnionHeadBlshIcon,
+    alt: "Onion Head envergonhado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionblush)",
+    src: OnionHeadBlushIcon,
+    alt: "Onion Head corando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncblush)",
+    src: OnionHeadCBlushIcon,
+    alt: "Onion Head corando timidamente",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondingdingding)",
+    src: OnionHeadDingDingDingIcon,
+    alt: "Onion Head tocando sino",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionembarrassed)",
+    src: OnionHeadEmbarrassedIcon,
+    alt: "Onion Head constrangido",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhappyhappy)",
+    src: OnionHeadHappyHappyIcon,
+    alt: "Onion Head muito feliz",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioninlove)",
+    src: OnionHeadInLoveIcon,
+    alt: "Onion Head apaixonado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionlovelove)",
+    src: OnionHeadLoveLoveIcon,
+    alt: "Onion Head cheio de amor",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionlvlv)",
+    src: OnionHeadLvLvIcon,
+    alt: "Onion Head com olhos de coração",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionnosebleeding)",
+    src: OnionHeadNoseBleedingIcon,
+    alt: "Onion Head com sangramento nasal",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionbunny)",
+    src: OnionHeadBunnyIcon,
+    alt: "Onion Head coelhinho apaixonado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionshiningeyes)",
+    src: OnionHeadShiningEyesIcon,
+    alt: "Onion Head com olhos brilhantes",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsobeautiful)",
+    src: OnionHeadSoBeautifulIcon,
+    alt: "Onion Head admirando tanta beleza",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionuhu)",
+    src: OnionHeadUhuIcon,
+    alt: "Onion Head feliz e tímido",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionawwtears)",
+    src: OnionHeadAwwTearsIcon,
+    alt: "Onion Head chorando de emoção",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionbadbow)",
+    src: OnionHeadBadBowIcon,
+    alt: "Onion Head fazendo reverência",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionbegging)",
+    src: OnionHeadBeggingIcon,
+    alt: "Onion Head implorando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondusting)",
+    src: OnionHeadDustingIcon,
+    alt: "Onion Head limpando a casa",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniongameaddict)",
+    src: OnionHeadGameAddictIcon,
+    alt: "Onion Head viciado em jogos",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhauntyou)",
+    src: OnionHeadHauntYouIcon,
+    alt: "Onion Head assombrando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondesu)",
+    src: OnionHeadDesuIcon,
+    alt: "Onion Head desu",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionpinnochio)",
+    src: OnionHeadPinnochioIcon,
+    alt: "Onion Head Pinóquio",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionshower)",
+    src: OnionHeadShowerIcon,
+    alt: "Onion Head tomando banho",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionredpass)",
+    src: OnionHeadRedPassIcon,
+    alt: "Onion Head mostrando cartão vermelho",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrobotface)",
+    src: OnionHeadRobotFaceIcon,
+    alt: "Onion Head com rosto de robô",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionyellowcard)",
+    src: OnionHeadYellowCardIcon,
+    alt: "Onion Head mostrando cartão amarelo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondrum)",
+    src: OnionHeadDrumIcon,
+    alt: "Onion Head tocando tambor",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrocking)",
+    src: OnionHeadRockingIcon,
+    alt: "Onion Head tocando rock",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionwhistle)",
+    src: OnionHeadWhistleIcon,
+    alt: "Onion Head assobiando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionallalone)",
+    src: OnionHeadAllAloneIcon,
+    alt: "Onion Head completamente sozinho",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionalone)",
+    src: OnionHeadAloneIcon,
+    alt: "Onion Head sozinho",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncomeback)",
+    src: OnionHeadComeBackIcon,
+    alt: "Onion Head pedindo para voltar",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncrycry)",
+    src: OnionHeadCryCryIcon,
+    alt: "Onion Head chorando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondepressed)",
+    src: OnionHeadDepressedIcon,
+    alt: "Onion Head deprimido",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionmisery)",
+    src: OnionHeadMiseryIcon,
+    alt: "Onion Head na miséria",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniontantrum)",
+    src: OnionHeadTantrumIcon,
+    alt: "Onion Head fazendo birra",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniontorture)",
+    src: OnionHeadTortureIcon,
+    alt: "Onion Head sofrendo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionwoe)",
+    src: OnionHeadWoeIcon,
+    alt: "Onion Head lamentando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionorz)",
+    src: OnionHeadOrzIcon,
+    alt: "Onion Head desolado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionruncry)",
+    src: OnionHeadRunCryIcon,
+    alt: "Onion Head correndo e chorando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsadness)",
+    src: OnionHeadSadnessIcon,
+    alt: "Onion Head triste",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionscared)",
+    src: OnionHeadScaredIcon,
+    alt: "Onion Head assustado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsighing)",
+    src: OnionHeadSighingIcon,
+    alt: "Onion Head suspirando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsobsobsob)",
+    src: OnionHeadSobSobSobIcon,
+    alt: "Onion Head soluçando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsweatdrop)",
+    src: OnionHeadSweatdropIcon,
+    alt: "Onion Head abatido",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionlazy)",
+    src: OnionHeadLazyIcon,
+    alt: "Onion Head com preguiça",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionlullaby)",
+    src: OnionHeadLullabyIcon,
+    alt: "Onion Head dormindo com canção de ninar",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniontired)",
+    src: OnionHeadTiredIcon,
+    alt: "Onion Head cansado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsaunarelax)",
+    src: OnionHeadSaunaRelaxIcon,
+    alt: "Onion Head relaxando na sauna",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionwarmandcomfy)",
+    src: OnionHeadWarmAndComfyIcon,
+    alt: "Onion Head aquecido e confortável",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncomeoverhere)",
+    src: OnionHeadComeOverHereIcon,
+    alt: "Onion Head chamando para perto",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncreepy)",
+    src: OnionHeadCreepyIcon,
+    alt: "Onion Head com sorriso sinistro",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionguaah)",
+    src: OnionHeadGuaahIcon,
+    alt: "Onion Head intimidador",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionhypno)",
+    src: OnionHeadHypnoIcon,
+    alt: "Onion Head hipnotizando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionplanning)",
+    src: OnionHeadPlanningIcon,
+    alt: "Onion Head planejando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniongraduating)",
+    src: OnionHeadGraduatingIcon,
+    alt: "Onion Head se formando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionisee)",
+    src: OnionHeadISeeIcon,
+    alt: "Onion Head entendendo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionbus)",
+    src: OnionHeadBusIcon,
+    alt: "Onion Head no ônibus escolar",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrightyouare)",
+    src: OnionHeadRightYouAreIcon,
+    alt: "Onion Head concordando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionschool)",
+    src: OnionHeadSchoolIcon,
+    alt: "Onion Head na escola",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsmarty)",
+    src: OnionHeadSmartyIcon,
+    alt: "Onion Head inteligente",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionstudytime)",
+    src: OnionHeadStudyTimeIcon,
+    alt: "Onion Head estudando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionthatsright)",
+    src: OnionHeadThatsRightIcon,
+    alt: "Onion Head dizendo que está certo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionawkward)",
+    src: OnionHeadAwkwardIcon,
+    alt: "Onion Head constrangido e surpreso",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onioncuriosity)",
+    src: OnionHeadCuriosityIcon,
+    alt: "Onion Head curioso",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondontunderstand)",
+    src: OnionHeadDontUnderstandIcon,
+    alt: "Onion Head sem entender",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionnyoron)",
+    src: OnionHeadNyoronIcon,
+    alt: "Onion Head confuso",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionomgnoes)",
+    src: OnionHeadOmgNoesIcon,
+    alt: "Onion Head desesperado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionomgwtfbbq)",
+    src: OnionHeadOmgWtfBbqIcon,
+    alt: "Onion Head extremamente surpreso",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionfacepalm)",
+    src: OnionHeadFacepalmIcon,
+    alt: "Onion Head fazendo facepalm",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionomfg)",
+    src: OnionHeadOmfgIcon,
+    alt: "Onion Head gritando de surpresa",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionpanic)",
+    src: OnionHeadPanicIcon,
+    alt: "Onion Head em pânico",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionspittake1)",
+    src: OnionHeadSpitTake1Icon,
+    alt: "Onion Head cuspindo de surpresa 1",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionspittake2)",
+    src: OnionHeadSpitTake2Icon,
+    alt: "Onion Head cuspindo de surpresa 2",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionpetrified)",
+    src: OnionHeadPetrifiedIcon,
+    alt: "Onion Head petrificado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrejected)",
+    src: OnionHeadRejectedIcon,
+    alt: "Onion Head rejeitado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionshock)",
+    src: OnionHeadShockIcon,
+    alt: "Onion Head chocado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionchase)",
+    src: OnionHeadChaseIcon,
+    alt: "Onion Head perseguindo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(oniondestroy)",
+    src: OnionHeadDestroyIcon,
+    alt: "Onion Head destruindo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionheadache)",
+    src: OnionHeadHeadacheIcon,
+    alt: "Onion Head com dor de cabeça",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionimmakillyou)",
+    src: OnionHeadImmaKillYouIcon,
+    alt: "Onion Head ameaçando",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
     code: "(onioninsulted)",
     src: OnionHeadInsultedIcon,
     alt: "Onion Head insultado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionkyle)",
+    src: OnionHeadKyleIcon,
+    alt: "Onion Head irritado",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionnotlistening)",
+    src: OnionHeadNotListeningIcon,
+    alt: "Onion Head sem ouvir",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionno)",
+    src: OnionHeadNoIcon,
+    alt: "Onion Head dizendo não",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionpunch)",
+    src: OnionHeadPunchIcon,
+    alt: "Onion Head dando um soco",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrocketpunch)",
+    src: OnionHeadRocketPunchIcon,
+    alt: "Onion Head dando um soco foguete",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionrun)",
+    src: OnionHeadRunIcon,
+    alt: "Onion Head correndo",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionsaiyan)",
+    src: OnionHeadSaiyanIcon,
+    alt: "Onion Head Saiyajin",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionvoodoo)",
+    src: OnionHeadVoodooIcon,
+    alt: "Onion Head vodu",
+    ...ONION_HEAD_DISPLAY_SIZE,
+  },
+  {
+    code: "(onionwatchit)",
+    src: OnionHeadWatchItIcon,
+    alt: "Onion Head mandando tomar cuidado",
     ...ONION_HEAD_DISPLAY_SIZE,
   },
   {
@@ -392,7 +1470,6 @@ function formatReceivedAt(receivedAt: number) {
 function ChatWindow() {
   const { id } = useParams();
   const { user } = useAuth();
-  const [isNudging, setIsNudging] = useState(false);
   const [isEmoticonPickerOpen, setIsEmoticonPickerOpen] = useState(false);
   const [activeEmoticonTab, setActiveEmoticonTab] =
     useState<EmoticonPickerTab>("standard");
@@ -424,13 +1501,15 @@ function ChatWindow() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const chatSurfaceRef = useRef<HTMLDivElement>(null);
   const messageComposerRef = useRef<HTMLDivElement>(null);
+  const nudgeSurfaceRef = useRef<HTMLElement>(null);
   const hasPositionedInitialMessagesRef = useRef(false);
   const nudgeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const nudgeResetTimerRef = useRef<number | undefined>(undefined);
   const isTaskbarHighlightedRef = useRef(false);
   const taskbarBlinkIntervalRef = useRef<number | undefined>(undefined);
   const taskbarBlinkEndTimerRef = useRef<number | undefined>(undefined);
   const realtimeSocketRef = useRef<Socket | null>(null);
-  const triggerNudgeEffectRef = useRef<() => Promise<void>>(async () => {});
+  const triggerNudgeEffectRef = useRef<() => void>(() => {});
   const initialNudgeHandledRef = useRef(false);
   const appWindow = useMemo(() => (isTauri() ? getCurrentWebviewWindow() : null), []);
   const activeExclusivePack =
@@ -527,6 +1606,13 @@ function ChatWindow() {
 
   const contactStatusFrame = CONTACT_STATUS_FRAMES[toContactStatus(contactStatus)];
   const contactStatusLabel = contactStatusFrame.label;
+
+  useEffect(() => {
+    if (!appWindow) return;
+    void appWindow.setTitle(contactName).catch((error) => {
+      console.error("Erro ao atualizar o título nativo da conversa:", error);
+    });
+  }, [appWindow, contactName]);
 
   const lastReceivedAt = useMemo(() => {
     const lastReceivedMessage = messages.findLast(
@@ -702,7 +1788,7 @@ function ChatWindow() {
         console.error("Erro ao alterar o destaque da conversa:", error);
       });
       void invoke("set_kwin_window_attention", {
-        windowTitle: `Conversa com ${contactName}`,
+        windowTitle: contactName,
         attention: highlighted,
       }).catch((error) => {
         console.error("Erro ao alternar o destaque no KWin:", error);
@@ -924,58 +2010,60 @@ function ChatWindow() {
   }, [messages]);
 
   useEffect(() => {
-    const audio = new Audio(nudgeSound);
-    audio.preload = "auto";
-    audio.volume = 1;
-    audio.load();
-    nudgeAudioRef.current = audio;
-
     return () => {
-      audio.pause();
+      nudgeAudioRef.current?.pause();
       nudgeAudioRef.current = null;
+      if (nudgeResetTimerRef.current !== undefined) {
+        window.clearTimeout(nudgeResetTimerRef.current);
+        nudgeResetTimerRef.current = undefined;
+      }
     };
   }, []);
 
-  // Guarda o estado em um Ref para o useEffect ler o valor atualizado sem precisar se reiniciar
-  const isNudgingRef = useRef(isNudging);
-  useEffect(() => {
-    isNudgingRef.current = isNudging;
-  }, [isNudging]);
-
   // EFEITO VISUAL E SONORO
-  const triggerNudgeEffect = useCallback(async () => {
-    if (isNudgingRef.current) return;
-    isNudgingRef.current = true;
-    setIsNudging(true);
-
-    try {
-      if (appWindow) {
-        await appWindow.unminimize();
-        await appWindow.show();
-        await appWindow.setFocus();
-      }
-    } catch (error) {
-      console.error("Erro ao focar janela nativa:", error);
+  const triggerNudgeEffect = useCallback(() => {
+    const nudgeSurface = nudgeSurfaceRef.current;
+    if (nudgeSurface) {
+      nudgeSurface.classList.remove("animate-nudge");
+      void nudgeSurface.offsetWidth;
+      nudgeSurface.classList.add("animate-nudge");
     }
 
-    try {
-      const audio = nudgeAudioRef.current;
-
-      if (!audio) {
-        throw new Error("O áudio de chamar atenção ainda não foi carregado.");
-      }
-
-      audio.pause();
-      audio.currentTime = 0;
-      await audio.play();
-    } catch (audioError) {
-      console.error("Erro ao reproduzir o som:", audioError);
+    if (nudgeResetTimerRef.current !== undefined) {
+      window.clearTimeout(nudgeResetTimerRef.current);
     }
-
-    setTimeout(() => {
-      isNudgingRef.current = false;
-      setIsNudging(false);
+    nudgeResetTimerRef.current = window.setTimeout(() => {
+      nudgeSurfaceRef.current?.classList.remove("animate-nudge");
+      nudgeResetTimerRef.current = undefined;
     }, 500);
+
+    if (appWindow) {
+      void (async () => {
+        try {
+          await appWindow.unminimize();
+          await appWindow.show();
+          await appWindow.setFocus();
+        } catch (error) {
+          console.error("Erro ao focar janela nativa:", error);
+        }
+      })();
+    }
+
+    if (isTauri()) {
+      const previousAudio = nudgeAudioRef.current;
+      previousAudio?.pause();
+
+      const audio = new Audio(nudgeSound);
+      audio.preload = "auto";
+      audio.volume = 1;
+      nudgeAudioRef.current = audio;
+
+      void audio.play().catch((audioError) => {
+        if (nudgeAudioRef.current === audio) {
+          console.error("Erro ao reproduzir o som:", audioError);
+        }
+      });
+    }
   }, [appWindow]);
 
   useEffect(() => {
@@ -985,29 +2073,19 @@ function ChatWindow() {
   useEffect(() => {
     if (!searchParams.has("nudge") || initialNudgeHandledRef.current) return;
     initialNudgeHandledRef.current = true;
-    void triggerNudgeEffect();
+    triggerNudgeEffect();
   }, [searchParams, triggerNudgeEffect]);
 
-  // AÇÃO DO REMETENTE
-  // const handleSendNudge = async () => {
-  //   // Treme a sua própria tela (feedback local)
-  //   await triggerNudgeEffect();
-
-  //   // Dispara o evento passando o label da janela atual
-  //   await emit("msn-nudge-received", {
-  //     chatId: id,
-  //     senderLabel: appWindow.label,
-  //   });
-  // };
   const handleSendNudge = async () => {
+    triggerNudgeEffect();
+
     const socket = realtimeSocketRef.current;
     if (!socket || !id) return;
     try {
-      const result = await socket.timeout(5_000).emitWithAck(
+      await socket.timeout(5_000).emitWithAck(
         "nudge:send",
         { conversationId: id },
-      ) as { delivered: boolean };
-      if (result.delivered) await triggerNudgeEffect();
+      );
     } catch (error) {
       console.error("Não foi possível chamar a atenção:", error);
     }
@@ -1060,9 +2138,8 @@ function ChatWindow() {
 
   return (
     <main
-      className={`relative flex h-screen w-screen flex-col overflow-hidden bg-transparent p-2.5 transition-transform ${
-        isNudging ? "animate-nudge" : ""
-      }`}
+      ref={nudgeSurfaceRef}
+      className="relative flex h-screen w-screen flex-col overflow-hidden bg-transparent p-2.5 transition-transform"
     >
       <button
         type="button"
@@ -1160,18 +2237,15 @@ function ChatWindow() {
           data-tauri-drag-region
           className="relative flex h-9 shrink-0 select-none items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
         >
-          <span className="flex items-end" aria-hidden="true">
-            <span className="h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
-            <span className="-ml-1 h-3 w-3 rounded-full bg-[#43a9d7] ring-1 ring-white" />
+          <span className="flex items-center" aria-hidden="true">
+            <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
+            <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
           </span>
           <span
             data-tauri-drag-region
             className="min-w-0 flex-1 truncate text-xs font-semibold text-[#315b72]"
           >
             Conversa com {contactName}
-          </span>
-          <span className="rounded-full border border-white/80 bg-white/45 px-2 py-0.5 text-[10px] font-medium text-[#47748c]">
-            {contactStatusLabel}
           </span>
           <div className="ml-1 flex h-full items-stretch">
             <button
@@ -1226,14 +2300,16 @@ function ChatWindow() {
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <header className="flex items-start justify-between border-b border-[#b9d3df] px-1 pb-2.5">
               <div className="min-w-0">
-                <h1 className="truncate text-lg font-semibold text-[#284f65]">
-                  <span style={contactNameEffect !== "default"
-                    ? getTextEffectStyle(contactNameEffect)
-                    : undefined}
+                <h1 className="flex min-w-0 items-center gap-1 text-lg font-semibold text-[#284f65]">
+                  <span
+                    className="min-w-0 truncate"
+                    style={contactNameEffect !== "default"
+                      ? getTextEffectStyle(contactNameEffect)
+                      : undefined}
                   >
                     {contactName}
-                  </span>{" "}
-                  <span className="text-sm font-normal italic text-[#67899a]">
+                  </span>
+                  <span className="shrink-0 text-sm font-normal italic text-[#67899a]">
                     ({contactStatusLabel})
                   </span>
                 </h1>
@@ -1453,7 +2529,7 @@ function ChatWindow() {
                     <div
                       role="dialog"
                       aria-label="Selecionar emoticon"
-                      className="absolute bottom-full left-0 z-40 mb-2 h-[198px] w-[380px] rounded-[10px] border border-[#7faec4] bg-gradient-to-b from-[#f8fdff] to-[#e3f3fa] p-2 shadow-[0_10px_30px_rgba(35,76,98,0.24)]"
+                      className="absolute bottom-full left-0 z-40 mb-2 h-[198px] w-[380px] rounded-[10px] border border-[#7faec4] bg-white p-2 shadow-[0_10px_30px_rgba(35,76,98,0.24)]"
                     >
                       <div
                         role="tablist"
@@ -1667,9 +2743,8 @@ function ChatWindow() {
 
                 <button
                   type="button"
-                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70 disabled:opacity-50"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
                   onClick={handleSendNudge}
-                  disabled={isNudging}
                   title="Chamar a atenção"
                 >
                   <img

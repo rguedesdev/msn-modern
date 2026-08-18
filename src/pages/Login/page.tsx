@@ -124,9 +124,9 @@ function LoginPage() {
                 data-tauri-drag-region
                 className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
               >
-                <span className="flex items-end" aria-hidden="true">
-                  <span className="h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
-                  <span className="-ml-1 h-3 w-3 rounded-full bg-[#43a9d7] ring-1 ring-white" />
+                <span className="flex items-center" aria-hidden="true">
+                  <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
+                  <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
                 </span>
                 <span
                   data-tauri-drag-region

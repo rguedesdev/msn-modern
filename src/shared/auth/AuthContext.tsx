@@ -8,7 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import * as authApi from "../api/auth";
-import { clearSession, getSession, saveSession, type ApiUser } from "../api/client";
+import {
+  ApiError,
+  clearSession,
+  getSession,
+  saveSession,
+  type ApiUser,
+} from "../api/client";
 import { registerCurrentDevice } from "../api/e2ee";
 
 interface AuthContextValue {
@@ -34,6 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(() => getSession() !== null);
 
   useEffect(() => {
+    const synchronizeSession = () => setUser(getSession()?.user ?? null);
+    window.addEventListener("msn-auth-changed", synchronizeSession);
+    window.addEventListener("storage", synchronizeSession);
+    return () => {
+      window.removeEventListener("msn-auth-changed", synchronizeSession);
+      window.removeEventListener("storage", synchronizeSession);
+    };
+  }, []);
+
+  useEffect(() => {
     const session = getSession();
     if (!session) {
       return;
@@ -50,8 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("Não foi possível registrar a chave E2EE do dispositivo:", error);
         });
       })
-      .catch(() => {
-        if (!cancelled) {
+      .catch((error) => {
+        if (cancelled) return;
+        if (
+          !getSession() ||
+          (error instanceof ApiError && (error.status === 401 || error.status === 404))
+        ) {
           clearSession();
           setUser(null);
         }
