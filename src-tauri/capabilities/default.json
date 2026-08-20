@@ -27,7 +27,7 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://*.ngrok-free.app" },
+        { "url": "https://*" },
         { "url": "http://127.0.0.1:3333" },
         { "url": "http://localhost:3333" }
       ]

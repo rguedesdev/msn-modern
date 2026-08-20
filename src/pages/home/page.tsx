@@ -46,6 +46,7 @@ import {
 import { showStyledNotificationWindow } from "../../shared/utils/styledNotification";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { resolveApiAssetUrl } from "../../shared/api/client";
+import { useApiAssetUrl } from "../../shared/hooks/useApiAssetUrl";
 import {
   createDirectConversation,
   findUserByEmail,
@@ -172,6 +173,7 @@ function ContactStatusFrame({
   contact: Contact;
 }) {
   const frame = CONTACT_STATUS_FRAMES[contact.status];
+  const avatarUrl = useApiAssetUrl(contact.avatarUrl);
 
   return (
     <div
@@ -184,9 +186,9 @@ function ContactStatusFrame({
       <div
         className="h-8 w-8 overflow-hidden rounded-[6px] bg-white shadow-inner"
       >
-        {contact.avatarUrl ? (
+        {avatarUrl ? (
           <img
-            src={resolveApiAssetUrl(contact.avatarUrl)}
+            src={avatarUrl}
             alt=""
             aria-hidden="true"
             className="h-full w-full object-cover object-center"

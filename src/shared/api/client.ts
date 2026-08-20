@@ -35,6 +35,15 @@ let refreshPromise: Promise<AuthSession | null> | null = null;
 const apiFetch: typeof fetch = isTauri()
   ? tauriFetch
   : globalThis.fetch.bind(globalThis);
+const apiAssetUrls = new Map<string, Promise<string>>();
+
+function createApiHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init);
+  if (new URL(API_URL).hostname.endsWith(".ngrok-free.app")) {
+    headers.set("ngrok-skip-browser-warning", "true");
+  }
+  return headers;
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -91,7 +100,7 @@ async function performSessionRefresh(
   try {
     response = await apiFetch(`${API_URL}/auth/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: createApiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ refreshToken: currentSession.refreshToken }),
     });
   } catch {
@@ -142,7 +151,7 @@ export async function apiRequest<T>(
   retryAfterRefresh = true,
 ): Promise<T> {
   const session = getSession();
-  const headers = new Headers(init.headers);
+  const headers = createApiHeaders(init.headers);
   if (
     init.body &&
     !(init.body instanceof FormData) &&
@@ -172,6 +181,46 @@ export function resolveApiAssetUrl(path: string | undefined): string {
   if (!path) return "";
   if (/^(?:data:|https?:)/.test(path)) return path;
   return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function requiresNativeApiAsset(path: string | undefined): boolean {
+  if (!isTauri() || !path) return false;
+  const url = resolveApiAssetUrl(path);
+  return url === API_URL || url.startsWith(`${API_URL}/`);
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 32_768;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+export function loadApiAssetUrl(path: string): Promise<string> {
+  const url = resolveApiAssetUrl(path);
+  if (!requiresNativeApiAsset(url)) return Promise.resolve(url);
+
+  const cached = apiAssetUrls.get(url);
+  if (cached) return cached;
+
+  const pending = apiFetch(url, { headers: createApiHeaders() })
+    .then(async (response) => {
+      if (!response.ok) throw new ApiError(response.status, await readError(response));
+      const contentType = response.headers.get("Content-Type")?.split(";", 1)[0].trim();
+      if (!contentType?.startsWith("image/")) {
+        throw new ApiError(response.status, "O backend não retornou uma imagem válida");
+      }
+      return `data:${contentType};base64,${arrayBufferToBase64(await response.arrayBuffer())}`;
+    })
+    .catch((error) => {
+      apiAssetUrls.delete(url);
+      throw error;
+    });
+  apiAssetUrls.set(url, pending);
+  return pending;
 }
 
 export { API_URL };

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useApiAssetUrl } from "../../hooks/useApiAssetUrl";
 import {
   CONTACT_STATUS_FRAMES,
   type ContactStatus,
@@ -27,6 +28,7 @@ function PictureFrame({
   imageSize = 100,
   fallback,
 }: PictureFrameProps) {
+  const displayedImageSrc = useApiAssetUrl(imageSrc);
   const initial = displayName.trim().charAt(0).toLocaleUpperCase("pt-BR") || "U";
   const isCustomFrame = frame !== "status";
   const frameBackground = frame === "status"
@@ -50,11 +52,11 @@ function PictureFrame({
           padding: "8px" /* Espessura da borda */,
         }}
       />
-      {fallback ?? (imageSrc ? (
+      {fallback ?? (displayedImageSrc ? (
         <img
           className="relative z-10 block rounded-lg object-cover"
           style={{ height: imageSize, width: imageSize }}
-          src={imageSrc}
+          src={displayedImageSrc}
           alt={imageAlt}
         />
       ) : (
