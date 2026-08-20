@@ -47,6 +47,12 @@
   transform: translateY(0.5px);
 }
 
+.msn-titlebar {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  box-shadow: none;
+}
+
 .msn-title-orb--blue {
   background: radial-gradient(
     circle at 36% 30%,
@@ -65,6 +71,10 @@
     #559f83 69%,
     #39745f 100%
   );
+}
+
+.msn-profile-message {
+  color: #527b90;
 }
 
 /* Checkbox de configurações: mesma construção visual usada no Orkkut. */
@@ -112,3 +122,243 @@
 /* body {
   background-color: rgb(220, 231, 240);
 } */
+
+/* Tema escuro: mantém os azuis e verdes do Messenger em uma base azul-petróleo. */
+html[data-msn-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-msn-theme="dark"] *,
+html[data-msn-theme="dark"] *::before,
+html[data-msn-theme="dark"] *::after {
+  scrollbar-color: #3183a3 #0a1c26;
+}
+
+html[data-msn-theme="dark"] *::-webkit-scrollbar-track {
+  background: #0a1c26;
+}
+
+html[data-msn-theme="dark"] *::-webkit-scrollbar-thumb {
+  border-color: #0a1c26;
+  background: linear-gradient(180deg, #3c99b9 0%, #1d607d 100%);
+}
+
+html[data-msn-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #52b1d0 0%, #287b99 100%);
+}
+
+/* Superfícies principais e barras de título. */
+html[data-msn-theme="dark"] [class~="from-[#f8fcfe]"][class~="via-[#edf7fb]"][class~="to-[#d8edf6]"] {
+  background-image: linear-gradient(to bottom, #102c3a, #0c222e, #071821) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-[#8fcbe8]"][class~="via-[#d4eefb]"][class~="to-[#f4fbfe]"] {
+  background-image: linear-gradient(to right, #155679, #123b50, #102a38) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-white/90"][class~="via-[#edf8fc]/90"][class~="to-[#cce7f2]/90"] {
+  background-image: linear-gradient(to bottom right, rgb(24 58 72 / 94%), rgb(15 42 55 / 94%), rgb(10 29 39 / 94%)) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-[#fafdff]"][class~="to-[#e2f2f9]"] {
+  background-image: linear-gradient(to bottom, #173746, #0b222e) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-[#f8fdff]"][class~="to-[#e3f3fa]"] {
+  background-image: linear-gradient(to bottom, #183b4b, #0d2734) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-white/95"][class~="to-[#f3f9fc]/95"],
+html[data-msn-theme="dark"] [class~="from-white"][class~="to-[#fbfdfe]"] {
+  background-image: linear-gradient(to bottom, #122d3a, #0a202b) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-[#f4fbfe]"][class~="to-[#dceef6]"] {
+  background-image: linear-gradient(to bottom, #173746, #0d2632) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-white"][class~="to-[#e5f3f9]"] {
+  background-image: linear-gradient(to bottom, #214657, #153342) !important;
+}
+
+html[data-msn-theme="dark"] [class~="from-[#dceef6]"][class~="to-white/60"] {
+  background-image: linear-gradient(to right, #183b4b, rgb(25 55 69 / 72%)) !important;
+}
+
+/* Painéis, campos e seleções que eram brancos translúcidos. */
+html[data-msn-theme="dark"] [class~="bg-white"],
+html[data-msn-theme="dark"] [class~="bg-white/95"],
+html[data-msn-theme="dark"] [class~="bg-white/90"],
+html[data-msn-theme="dark"] [class~="bg-white/85"],
+html[data-msn-theme="dark"] [class~="bg-white/80"],
+html[data-msn-theme="dark"] [class~="bg-white/75"],
+html[data-msn-theme="dark"] [class~="bg-white/70"],
+html[data-msn-theme="dark"] [class~="bg-white/65"],
+html[data-msn-theme="dark"] [class~="bg-white/60"],
+html[data-msn-theme="dark"] [class~="bg-white/55"],
+html[data-msn-theme="dark"] [class~="bg-white/45"],
+html[data-msn-theme="dark"] [class~="bg-white/35"] {
+  background-color: rgb(19 48 61 / 88%) !important;
+}
+
+html[data-msn-theme="dark"] [class~="bg-white"] {
+  background-color: #13303d !important;
+}
+
+html[data-msn-theme="dark"] [class~="bg-[#dff2fa]"] {
+  background-color: #16475a !important;
+}
+
+html[data-msn-theme="dark"] [class~="bg-[#f8fdff]"] {
+  background-color: #102c39 !important;
+}
+
+html[data-msn-theme="dark"] [class~="bg-[#dceef6]"] {
+  background-color: #1b4d60 !important;
+}
+
+html[data-msn-theme="dark"] input:not([type="checkbox"]),
+html[data-msn-theme="dark"] textarea,
+html[data-msn-theme="dark"] select {
+  border-color: #356f86 !important;
+  background-color: rgb(9 30 40 / 92%) !important;
+  color: #d6edf6 !important;
+  caret-color: #63c7e8;
+}
+
+html[data-msn-theme="dark"] input + label::before {
+  background-color: #0d2632 !important;
+}
+
+html[data-msn-theme="dark"] input::placeholder,
+html[data-msn-theme="dark"] textarea::placeholder {
+  color: #779dab;
+}
+
+/* Tipografia: branco azulado para títulos e ciano acinzentado para apoio. */
+html[data-msn-theme="dark"] [class~="text-[#17364d]"],
+html[data-msn-theme="dark"] [class~="text-[#213a52]"],
+html[data-msn-theme="dark"] [class~="text-[#245f7b]"],
+html[data-msn-theme="dark"] [class~="text-[#27495e]"],
+html[data-msn-theme="dark"] [class~="text-[#284f65]"],
+html[data-msn-theme="dark"] [class~="text-[#286c8d]"],
+html[data-msn-theme="dark"] [class~="text-[#287da5]"],
+html[data-msn-theme="dark"] [class~="text-[#304f60]"],
+html[data-msn-theme="dark"] [class~="text-[#31556a]"],
+html[data-msn-theme="dark"] [class~="text-[#315b72]"],
+html[data-msn-theme="dark"] [class~="text-[#315f77]"],
+html[data-msn-theme="dark"] [class~="text-[#34556c]"],
+html[data-msn-theme="dark"] [class~="text-[#375567]"],
+html[data-msn-theme="dark"] [class~="text-[#426b81]"] {
+  color: #cce9f4 !important;
+}
+
+html[data-msn-theme="dark"] [class~="text-[#436b80]"],
+html[data-msn-theme="dark"] [class~="text-[#47748c]"],
+html[data-msn-theme="dark"] [class~="text-[#51758a]"],
+html[data-msn-theme="dark"] [class~="text-[#52758a]"],
+html[data-msn-theme="dark"] [class~="text-[#527b90]"],
+html[data-msn-theme="dark"] [class~="text-[#64879a]"],
+html[data-msn-theme="dark"] [class~="text-[#67899a]"],
+html[data-msn-theme="dark"] [class~="text-[#6e8998]"],
+html[data-msn-theme="dark"] [class~="text-[#6f91a2]"],
+html[data-msn-theme="dark"] [class~="text-[#7893a0]"],
+html[data-msn-theme="dark"] [class~="text-[#7894a2]"],
+html[data-msn-theme="dark"] [class~="text-[#91a5af]"] {
+  color: #8fb8c8 !important;
+}
+
+html[data-msn-theme="dark"] [class~="text-[#1670c5]"],
+html[data-msn-theme="dark"] [class~="text-[#1680bb]"],
+html[data-msn-theme="dark"] [class~="text-[#328db7]"] {
+  color: #63c7e8 !important;
+}
+
+/* Contornos frios substituem os cinzas claros sem apagar a silhueta MSN. */
+html[data-msn-theme="dark"] [class~="border-[#6694ad]"],
+html[data-msn-theme="dark"] [class~="border-[#6f9db4]"],
+html[data-msn-theme="dark"] [class~="border-[#79a9bf]"],
+html[data-msn-theme="dark"] [class~="border-[#7fa9bf]"],
+html[data-msn-theme="dark"] [class~="border-[#7faec4]"],
+html[data-msn-theme="dark"] [class~="border-[#8ebbd0]"],
+html[data-msn-theme="dark"] [class~="border-[#8fb2c3]"],
+html[data-msn-theme="dark"] [class~="border-[#9dbdcc]"],
+html[data-msn-theme="dark"] [class~="border-[#b6d0dc]"],
+html[data-msn-theme="dark"] [class~="border-[#b9d3df]"],
+html[data-msn-theme="dark"] [class~="border-[#b9d5e1]"],
+html[data-msn-theme="dark"] [class~="border-[#c4dbe5]"],
+html[data-msn-theme="dark"] [class~="border-[#c7dce5]"],
+html[data-msn-theme="dark"] [class~="border-[#d4e5ed]"] {
+  border-color: #285d72 !important;
+}
+
+html[data-msn-theme="dark"] [class~="border-white/90"],
+html[data-msn-theme="dark"] [class~="border-white/80"],
+html[data-msn-theme="dark"] [class~="border-white/75"] {
+  border-color: rgb(91 157 181 / 38%) !important;
+}
+
+/* Estados de interação no escuro. */
+html[data-msn-theme="dark"] [class~="hover:bg-white/85"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white/80"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white/70"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white/65"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white/60"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white/55"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white/50"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white/45"]:hover,
+html[data-msn-theme="dark"] [class~="hover:bg-white"]:hover,
+html[data-msn-theme="dark"] [class~="enabled:hover:bg-white/70"]:enabled:hover {
+  background-color: rgb(39 83 99 / 82%) !important;
+}
+
+html[data-msn-theme="dark"] [class~="hover:bg-[#e5f3f9]"]:hover {
+  background-color: #20566a !important;
+}
+
+html[data-msn-theme="dark"] [class~="hover:from-[#d9eff9]"]:hover {
+  --tw-gradient-from: #1d4d60 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(29 77 96 / 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+html[data-msn-theme="dark"] [class~="hover:to-[#f5fbfe]"]:hover {
+  --tw-gradient-to: #173847 var(--tw-gradient-to-position) !important;
+}
+
+html[data-msn-theme="dark"] .msn-settings-checkbox {
+  border-color: #3e819a;
+  background-color: #0b2632;
+}
+
+html[data-msn-theme="dark"] .msn-settings-checkbox:checked {
+  border-color: #45abd0;
+  background-color: #278eb9;
+}
+
+html[data-msn-theme="dark"] .msn-title-orb--blue {
+  box-shadow: 0 0 7px rgb(84 190 232 / 45%), inset -1px -1px 2px rgb(8 30 40 / 45%);
+}
+
+html[data-msn-theme="dark"] .msn-title-orb--green {
+  box-shadow: 0 0 7px rgb(88 198 151 / 38%), inset -1px -1px 2px rgb(8 30 40 / 45%);
+}
+
+html[data-msn-theme="dark"] .msn-local-player-icon {
+  color: #cce9f4 !important;
+}
+
+html[data-msn-theme="dark"] .msn-profile-message {
+  color: #8fb8c8;
+}
+
+html[data-msn-theme="dark"] .msn-settings-trigger {
+  box-shadow: none !important;
+}
+
+html[data-msn-theme="dark"] .msn-status-picker button[class~="border-white"],
+html[data-msn-theme="dark"] .msn-status-picker button[class~="hover:border-white"]:hover,
+html[data-msn-theme="dark"] .msn-settings-trigger[class~="border-white"],
+html[data-msn-theme="dark"] .msn-settings-trigger[class~="hover:border-white"]:hover {
+  border-color: #326b80 !important;
+}

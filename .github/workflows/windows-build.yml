@@ -3,14 +3,28 @@ run-name: Build Windows • ${{ github.ref_name }} • ${{ github.sha }}
 
 on:
   workflow_dispatch:
+    inputs:
+      api_url:
+        description: URL HTTPS pública do backend (vazio usa a variável VITE_API_URL)
+        required: false
+        type: string
   push:
     branches:
       - main
       - develop
 
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-windows:
+    name: Windows x64 (NSIS test build)
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -30,20 +44,75 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
+      - name: Validate distribution configuration
+        shell: pwsh
+        env:
+          INPUT_API_URL: ${{ inputs.api_url }}
+          REPOSITORY_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          $apiUrl = if ([string]::IsNullOrWhiteSpace($env:INPUT_API_URL)) {
+            $env:REPOSITORY_API_URL
+          } else {
+            $env:INPUT_API_URL
+          }
+
+          if ([string]::IsNullOrWhiteSpace($apiUrl)) {
+            throw "Defina a variável VITE_API_URL ou informe api_url ao executar o workflow."
+          }
+
+          $parsedApiUrl = $null
+          if (-not [Uri]::TryCreate($apiUrl, [UriKind]::Absolute, [ref]$parsedApiUrl)) {
+            throw "VITE_API_URL não é uma URL absoluta válida."
+          }
+          if ($parsedApiUrl.Scheme -ne "https") {
+            throw "VITE_API_URL deve usar HTTPS para uma distribuição pública."
+          }
+
+          "VITE_API_URL=$($apiUrl.TrimEnd('/'))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "Backend incluído no build: $($apiUrl.TrimEnd('/'))" >> $env:GITHUB_STEP_SUMMARY
+
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Check frontend
+        run: npm run lint
+
       - name: Build Windows installer
         run: npm run tauri -- build --bundles nsis
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL || 'http://192.168.15.15:3333' }}
+
+      - name: Verify build artifacts
+        shell: pwsh
+        run: |
+          $files = @(
+            Get-Item "src-tauri/target/release/app.exe"
+            Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe"
+          )
+          if ($files.Count -lt 2) {
+            throw "Executável ou instalador NSIS não encontrado."
+          }
+          "✅ Executável e instalador NSIS gerados para testes." >> $env:GITHUB_STEP_SUMMARY
+          "⚠️ Build sem assinatura Authenticode; o SmartScreen pode exibir um aviso." >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Create SHA-256 checksums
+        shell: pwsh
+        run: |
+          $artifacts = @(
+            Get-Item "src-tauri/target/release/app.exe"
+            Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe"
+          )
+          $checksums = foreach ($artifact in $artifacts) {
+            $hash = Get-FileHash -Algorithm SHA256 $artifact.FullName
+            "$($hash.Hash.ToLowerInvariant())  $($artifact.Name)"
+          }
+          $checksums | Set-Content "src-tauri/target/release/bundle/nsis/SHA256SUMS.txt" -Encoding utf8
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v6
         with:
-          name: msn-modern-windows-${{ github.sha }}
+          name: msn-messenger-windows-${{ github.sha }}
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
             src-tauri/target/release/app.exe
           if-no-files-found: error
           retention-days: 14

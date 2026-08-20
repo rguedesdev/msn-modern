@@ -14,6 +14,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow"; // Para cria
 import { PictureFrame } from "../../shared/constants/PictureFrame/page";
 import { Input } from "../../shared/components/Input";
 import { MediaSourceIcon } from "../../shared/components/MediaSourceIcon";
+import { useTheme } from "../../shared/theme/ThemeContext";
 
 // Constants
 import { getTextEffectStyle } from "../../shared/constants/TextEffects/page";
@@ -23,6 +24,7 @@ import {
   type ProfileFrame,
 } from "../../shared/constants/ProfileStyle/page";
 import {
+  getStatusOptionClassName,
   isUserStatus,
   LOGIN_STATUS_STORAGE_KEY,
   STATUS_CONFIG,
@@ -68,6 +70,7 @@ import {
   MdArrowDropDown,
   MdClose,
   MdCropSquare,
+  MdDarkMode,
   MdMinimize,
   MdMusicNote,
   MdLockOutline,
@@ -175,7 +178,7 @@ function ContactStatusFrame({
       role="img"
       aria-label={`${contact.name}, ${frame.label}`}
       title={frame.label}
-      className="shrink-0 rounded-[7px] p-[3px] shadow-[0_1px_3px_rgba(45,91,113,0.22)] ring-1 ring-white/90"
+      className="shrink-0 rounded-[7px] p-[3px] shadow-[0_1px_3px_rgba(45,91,113,0.22)]"
       style={{ background: frame.background }}
     >
       <div
@@ -645,6 +648,7 @@ function initialUserStatus(): UserStatus {
 }
 
 function HomePage() {
+  const { theme, setTheme } = useTheme();
   const {
     user,
     signOut,
@@ -1639,7 +1643,7 @@ function HomePage() {
       <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-[#6694ad] bg-gradient-to-b from-[#f8fcfe] via-[#edf7fb] to-[#d8edf6]">
         <header
           data-tauri-drag-region
-          className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+          className="msn-titlebar flex h-9 shrink-0 select-none items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3"
         >
           <span className="msn-title-orbs flex items-center" aria-hidden="true">
             <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
@@ -1704,9 +1708,9 @@ function HomePage() {
               }
               setIsSettingsOpen((isOpen) => !isOpen);
             }}
-            className={`grid h-8 w-8 place-items-center rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-[#65afd0]/40 ${
+            className={`msn-settings-trigger grid h-8 w-8 place-items-center rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-[#65afd0]/40 ${
               isSettingsOpen
-                ? "border-white bg-white/80 text-[#287da5] shadow-sm"
+                ? "border-white bg-white/80 text-[#287da5]"
                 : "border-transparent text-[#527b90] hover:border-white hover:bg-white/70"
             }`}
           >
@@ -1866,7 +1870,7 @@ function HomePage() {
                               } ${
                                 isSelected
                                   ? "border-[#3b96bd] bg-[#dff2fa] text-[#245f7b] shadow-[0_0_0_1px_rgba(59,150,189,0.18)]"
-                                  : "border-[#b6d0dc] bg-white/75 text-[#52758a] hover:border-[#7eb5ca] hover:bg-white"
+                                  : "border-transparent bg-white/75 text-[#52758a] hover:border-[#7eb5ca] hover:bg-white"
                               }`}
                             >
                               <span
@@ -1955,6 +1959,26 @@ function HomePage() {
                     </p>
                   </div>
                 </details>
+
+                <label className="group flex cursor-pointer select-none items-start gap-3 rounded-lg border border-white/80 bg-white/55 p-3 transition-all duration-200 ease-out hover:border-[#9bc7da] hover:bg-white/85 hover:shadow-[0_2px_8px_rgba(50,125,160,0.10)]">
+                  <input
+                    type="checkbox"
+                    checked={theme === "dark"}
+                    onChange={(event) => {
+                      setTheme(event.currentTarget.checked ? "dark" : "light");
+                    }}
+                    className="msn-settings-checkbox mt-0.5 shrink-0"
+                  />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-[#315f77]">
+                      <MdDarkMode aria-hidden="true" size={16} />
+                      Tema escuro
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-4 text-[#64879a]">
+                      Usa azul-petróleo, ciano e verde Messenger com contraste suave.
+                    </span>
+                  </span>
+                </label>
 
                 <label className="group flex cursor-pointer select-none items-start gap-3 rounded-lg border border-white/80 bg-white/55 p-3 transition-all duration-200 ease-out hover:border-[#9bc7da] hover:bg-white/85 hover:shadow-[0_2px_8px_rgba(50,125,160,0.10)]">
                   <input
@@ -2087,7 +2111,7 @@ function HomePage() {
                 </span>
 
                 <div
-                  className="relative"
+                  className="msn-status-picker relative"
                   onBlur={(event) => {
                     if (!event.currentTarget.contains(event.relatedTarget)) {
                       setIsStatusMenuOpen(false);
@@ -2135,11 +2159,7 @@ function HomePage() {
                               onClick={() => {
                                 changeStatus(statusValue as UserStatus);
                               }}
-                              className={`flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-left text-xs transition-colors ${
-                                isSelected
-                                  ? "border-white bg-white/80 font-semibold text-[#286c8d]"
-                                  : "border-transparent text-[#52758a] hover:border-white hover:bg-white/65"
-                              }`}
+                              className={getStatusOptionClassName(isSelected)}
                             >
                               <span
                                 className={`h-3 w-3 rounded-full border border-white shadow-sm ${statusData.color}`}
@@ -2201,7 +2221,7 @@ function HomePage() {
                   type="button"
                   title="Clique para editar sua mensagem pessoal"
                   onClick={startEditingPersonalMessage}
-                  className="mt-0.5 max-w-full truncate rounded px-1 py-0.5 text-left text-[13px] italic text-[#527b90] transition-colors hover:bg-white/55 hover:text-[#315f77] focus:outline-none focus:ring-2 focus:ring-[#65afd0]/35"
+                  className="msn-profile-message mt-0.5 max-w-full truncate rounded px-1 py-0.5 text-left text-[13px] italic transition-colors hover:bg-white/55 hover:text-[#315f77] focus:outline-none focus:ring-2 focus:ring-[#65afd0]/35"
                 >
                   {personalMessage || "<Insira uma mensagem pessoal>"}
                 </button>
@@ -2364,7 +2384,7 @@ function HomePage() {
           className="flex h-full min-w-0 max-w-full flex-1 flex-col gap-3 overflow-hidden rounded-[12px] border border-[#8fb2c3] bg-white/70 p-3 shadow-[0_3px_12px_rgba(38,79,103,0.14)] transition-all duration-300"
         >
           {/* Input de busca mantido no topo */}
-          <div className="group relative [&_input]:pr-10">
+          <div className="group relative [&_input]:!shadow-none [&_input]:pr-10">
             <Input
               inputName="Buscar contato"
               value={contactSearch}
@@ -2432,7 +2452,7 @@ function HomePage() {
                   <div
                     key={contato.id}
                     onDoubleClick={() => handleContactClick(contato)} // 👈 GATILHO DE JANELA (ABAS GERAIS)
-                    className="flex min-w-0 max-w-full cursor-pointer select-none flex-row items-center gap-3 overflow-hidden rounded-[8px] border border-transparent p-1.5 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
+                    className="flex min-w-0 max-w-full cursor-pointer select-none flex-row items-center gap-3 overflow-hidden rounded-[8px] border border-transparent p-1.5 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[0_1px_3px_rgba(45,91,113,0.14)]"
                   >
                     <ContactStatusFrame contact={contato} />
                     {/* Informações do Contato */}
@@ -2464,7 +2484,7 @@ function HomePage() {
                         // O callback só lê statusRef quando o evento ocorre; o analisador o segue como se fosse render.
                         // eslint-disable-next-line react-hooks/refs
                         <div key={contato.id} onDoubleClick={() => handleContactClick(contato)}
-                          className="flex min-w-0 max-w-full cursor-pointer select-none flex-row items-center gap-3 overflow-hidden rounded-[8px] border border-transparent p-1.5 pl-4 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[inset_0_1px_0_white,0_1px_3px_rgba(45,91,113,0.14)]"
+                          className="flex min-w-0 max-w-full cursor-pointer select-none flex-row items-center gap-3 overflow-hidden rounded-[8px] border border-transparent p-1.5 pl-4 transition-all hover:border-[#8ebbd0] hover:bg-gradient-to-r hover:from-[#d9eff9] hover:to-[#f5fbfe] hover:shadow-[0_1px_3px_rgba(45,91,113,0.14)]"
                         >
                           <ContactStatusFrame contact={contato} />
                           <div

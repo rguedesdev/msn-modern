@@ -13,7 +13,7 @@ function LoadingScreen() {
       <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-[#6694ad] bg-gradient-to-b from-[#f8fcfe] via-[#edf7fb] to-[#d8edf6]">
         <header
           data-tauri-drag-region
-          className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+          className="msn-titlebar flex h-9 shrink-0 select-none items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3"
         >
           <span className="msn-title-orbs flex items-center" aria-hidden="true">
             <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />

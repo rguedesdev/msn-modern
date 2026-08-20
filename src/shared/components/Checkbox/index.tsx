@@ -10,7 +10,7 @@ function Checkbox({ checkboxText }: ICheckbox) {
       <div className="relative">
         <input type="checkbox" className="peer sr-only" />
 
-        <div className="flex h-5 w-5 items-center justify-center rounded-md border border-[#8cabb9] bg-white/85 shadow-[inset_0_1px_2px_rgba(42,83,104,0.1)] transition-all duration-200 peer-hover:border-[#4d9fc4] peer-checked:border-[#3989b1] peer-checked:bg-gradient-to-b peer-checked:from-[#78c5e5] peer-checked:to-[#3295c2]">
+        <div className="flex h-5 w-5 items-center justify-center rounded-md border border-[#8cabb9] bg-white/85 transition-all duration-200 peer-hover:border-[#4d9fc4] peer-checked:border-[#3989b1] peer-checked:bg-gradient-to-b peer-checked:from-[#78c5e5] peer-checked:to-[#3295c2]">
           <ImCheckmark className="text-white text-[16px] opacity-0 transition-opacity" />
         </div>
 

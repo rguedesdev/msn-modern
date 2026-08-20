@@ -50,3 +50,8 @@ npm run lint
 npm run server:build
 npm run server:test
 ```
+
+## Testes distribuídos no Windows
+
+Consulte [docs/windows-testing.md](docs/windows-testing.md) para configurar o
+build de teste no GitHub e um endpoint HTTPS estável para o backend via ngrok.

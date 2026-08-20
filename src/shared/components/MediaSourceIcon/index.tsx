@@ -102,5 +102,10 @@ export function MediaSourceIcon({ source }: { source: string }) {
     return <MdMusicNote aria-label={source} />;
   }
 
-  return <RiDiscFill aria-label={source || "Player de música"} className="text-black" />;
+  return (
+    <RiDiscFill
+      aria-label={source || "Player de música"}
+      className="msn-local-player-icon text-black"
+    />
+  );
 }

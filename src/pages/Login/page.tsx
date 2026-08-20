@@ -15,6 +15,7 @@ import { toContactStatus } from "../../shared/constants/ContactStatusFrame/page"
 
 // Constants
 import {
+  getStatusOptionClassName,
   LOGIN_STATUS_STORAGE_KEY,
   STATUS_CONFIG,
 } from "../../shared/constants/StatusConfig/page";
@@ -124,7 +125,7 @@ function LoginPage() {
             <div className="relative flex h-full w-full flex-col overflow-visible rounded-[14px] border border-[#6694ad] bg-gradient-to-b from-[#f8fcfe] via-[#edf7fb] to-[#d8edf6]">
               <header
                 data-tauri-drag-region
-                className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+                className="msn-titlebar flex h-9 shrink-0 select-none items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3"
               >
                 <span className="msn-title-orbs flex items-center" aria-hidden="true">
                   <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
@@ -190,7 +191,7 @@ function LoginPage() {
                   <p className="text-xs font-medium text-[#52758a]">Status:</p>
 
                   <div
-                    className="relative"
+                    className="msn-status-picker relative"
                     onBlur={(event) => {
                       if (!event.currentTarget.contains(event.relatedTarget)) {
                         setIsStatusMenuOpen(false);
@@ -244,11 +245,7 @@ function LoginPage() {
                                   );
                                   setIsStatusMenuOpen(false);
                                 }}
-                                className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-xs transition-colors ${
-                                  isSelected
-                                    ? "border border-white bg-white/80 font-semibold text-[#286c8d]"
-                                    : "border border-transparent text-[#52758a] hover:border-white hover:bg-white/65"
-                                }`}
+                                className={getStatusOptionClassName(isSelected)}
                               >
                                 <span
                                   className={`h-3 w-3 rounded-full border border-white shadow-sm ${statusData.color}`}
@@ -273,7 +270,11 @@ function LoginPage() {
                   </div>
                 </div>
 
-                <form className="contents" onSubmit={handleAuthSubmit} noValidate>
+                <form
+                  className="contents [&_input]:!shadow-none"
+                  onSubmit={handleAuthSubmit}
+                  noValidate
+                >
                   <div className="mt-4 w-full">
                     {isRegistering && (
                       <>
@@ -322,7 +323,7 @@ function LoginPage() {
                   </div>
 
                   {!isRegistering && (
-                    <div className="mt-3 w-full rounded-[9px] border border-white/75 bg-white/35 px-3 pb-3 pt-0.5 shadow-[inset_0_1px_0_white]">
+                    <div className="mt-3 w-full rounded-[9px] border border-white/75 bg-white/35 px-3 pb-3 pt-0.5">
                       <Checkbox checkboxText="Manter conectado nesta execução" />
                     </div>
                   )}

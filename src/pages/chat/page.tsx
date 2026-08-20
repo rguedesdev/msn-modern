@@ -2184,7 +2184,6 @@ function ChatWindow() {
         ref={chatSurfaceRef}
         className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px] border border-[#6694ad] bg-gradient-to-b from-[#f8fcfe] via-[#edf7fb] to-[#d8edf6] font-sans antialiased [text-rendering:geometricPrecision]"
       >
-        <span className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-white/50 blur-3xl" />
         <span className="pointer-events-none absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[#70c9ec]/20 blur-3xl" />
 
         {isVideoCallOpen && videoCallBounds && (
@@ -2249,7 +2248,7 @@ function ChatWindow() {
 
         <div
           data-tauri-drag-region
-          className="relative flex h-9 shrink-0 select-none items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+          className="msn-titlebar relative flex h-9 shrink-0 select-none items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3"
         >
           <span className="msn-title-orbs flex items-center" aria-hidden="true">
             <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
@@ -2328,7 +2327,7 @@ function ChatWindow() {
                   </span>
                 </h1>
                 {contactActivity && (
-                  <div className="flex min-w-0 items-center gap-1.5 text-xs italic text-[#527589]">
+                  <div className="msn-profile-message flex min-w-0 items-center gap-1.5 text-xs italic">
                     {contactMusicSource && (
                       <span className="shrink-0 text-[16px] not-italic">
                         <MediaSourceIcon source={contactMusicSource} />
@@ -2343,7 +2342,7 @@ function ChatWindow() {
             <div
               ref={messagesContainerRef}
               aria-live="polite"
-              className="min-h-0 flex-1 overflow-y-auto rounded-[10px] border border-[#9dbdcc] bg-gradient-to-b from-white/95 to-[#f3f9fc]/95 p-3 text-sm shadow-[inset_0_2px_5px_rgba(47,91,113,0.1),0_1px_0_white]"
+              className="min-h-0 flex-1 overflow-y-auto rounded-[10px] border border-[#9dbdcc] bg-gradient-to-b from-white/95 to-[#f3f9fc]/95 p-3 text-sm shadow-[inset_0_2px_5px_rgba(47,91,113,0.1)]"
             >
               {messages.length === 0 ? (
                 <div className="flex h-full min-h-24 items-center justify-center">
@@ -2508,7 +2507,7 @@ function ChatWindow() {
               />
             </div>
 
-            <div className="flex min-h-11 items-center justify-between rounded-b-[9px] border-t border-[#b9d5e1] bg-gradient-to-b from-[#f4fbfe] to-[#dceef6] px-2 shadow-[inset_0_1px_0_white]">
+            <div className="flex min-h-11 items-center justify-between rounded-b-[9px] border-t border-[#b9d5e1] bg-gradient-to-b from-[#f4fbfe] to-[#dceef6] px-2">
               {/* Caixa de Ações */}
               <div className="flex items-center">
                 <div
