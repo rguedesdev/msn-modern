@@ -20,7 +20,7 @@ import { registerCurrentDevice } from "../api/e2ee";
 interface AuthContextValue {
   user: ApiUser | null;
   isLoading: boolean;
-  signIn(email: string, password: string): Promise<void>;
+  signIn(email: string, password: string, rememberMe: boolean): Promise<void>;
   signUp(email: string, displayName: string, password: string): Promise<void>;
   updateProfile(profile: Partial<Pick<
     ApiUser,
@@ -85,8 +85,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const session = await authApi.login(email, password);
+  const signIn = useCallback(async (
+    email: string,
+    password: string,
+    rememberMe: boolean,
+  ) => {
+    const session = await authApi.login(email, password, rememberMe);
     setUser(session.user);
     void registerCurrentDevice(session.user.id).catch((error) => {
       console.error("Não foi possível registrar a chave E2EE do dispositivo:", error);

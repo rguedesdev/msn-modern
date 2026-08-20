@@ -7,12 +7,16 @@ import {
   type AuthSession,
 } from "./client";
 
-export async function login(email: string, password: string): Promise<AuthSession> {
+export async function login(
+  email: string,
+  password: string,
+  rememberMe: boolean,
+): Promise<AuthSession> {
   const session = await apiRequest<AuthSession>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
-  saveSession(session);
+  saveSession(session, rememberMe ? "local" : "session");
   return session;
 }
 
@@ -25,7 +29,7 @@ export async function register(
     method: "POST",
     body: JSON.stringify({ email, displayName, password }),
   });
-  saveSession(session);
+  saveSession(session, "session");
   return session;
 }
 

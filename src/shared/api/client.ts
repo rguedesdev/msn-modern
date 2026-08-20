@@ -28,7 +28,10 @@ export interface AuthSession {
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "")
   ?? "http://127.0.0.1:3333";
 const SESSION_KEY = "msn-modern:session";
+const SESSION_PERSISTENCE_KEY = "msn-modern:session-persistence";
 const REFRESH_LOCK_NAME = "msn-modern:refresh-session";
+
+export type SessionPersistence = "local" | "session";
 
 let refreshPromise: Promise<AuthSession | null> | null = null;
 
@@ -59,21 +62,52 @@ export class ApiError extends Error {
 
 export function getSession(): AuthSession | null {
   try {
-    const value = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
-    if (value && !localStorage.getItem(SESSION_KEY)) localStorage.setItem(SESSION_KEY, value);
+    const localSession = localStorage.getItem(SESSION_KEY);
+    const isExplicitlyPersistent =
+      localStorage.getItem(SESSION_PERSISTENCE_KEY) === "local";
+
+    // Sessões de versões anteriores eram persistidas sem consentimento.
+    if (localSession && !isExplicitlyPersistent) {
+      localStorage.removeItem(SESSION_KEY);
+    }
+
+    const value = (isExplicitlyPersistent ? localSession : null)
+      ?? sessionStorage.getItem(SESSION_KEY);
     return value ? JSON.parse(value) as AuthSession : null;
   } catch {
     return null;
   }
 }
 
-export function saveSession(session: AuthSession): void {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+function getSessionPersistence(): SessionPersistence | null {
+  if (
+    localStorage.getItem(SESSION_PERSISTENCE_KEY) === "local" &&
+    localStorage.getItem(SESSION_KEY)
+  ) return "local";
+  if (sessionStorage.getItem(SESSION_KEY)) return "session";
+  return null;
+}
+
+export function saveSession(
+  session: AuthSession,
+  persistence: SessionPersistence = getSessionPersistence() ?? "session",
+): void {
+  const serializedSession = JSON.stringify(session);
+  if (persistence === "local") {
+    localStorage.setItem(SESSION_KEY, serializedSession);
+    localStorage.setItem(SESSION_PERSISTENCE_KEY, "local");
+    sessionStorage.removeItem(SESSION_KEY);
+  } else {
+    sessionStorage.setItem(SESSION_KEY, serializedSession);
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_PERSISTENCE_KEY);
+  }
   window.dispatchEvent(new Event("msn-auth-changed"));
 }
 
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(SESSION_PERSISTENCE_KEY);
   sessionStorage.removeItem(SESSION_KEY);
   window.dispatchEvent(new Event("msn-auth-changed"));
 }

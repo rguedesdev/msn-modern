@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "msn-modern",
+  "productName": "MSN Messenger",
   "version": "0.1.5",
-  "identifier": "com.rguedesdev.msnmodern",
+  "identifier": "com.rguedesdev.msnmessenger",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",

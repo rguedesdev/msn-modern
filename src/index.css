@@ -77,6 +77,10 @@
   color: #527b90;
 }
 
+.msn-floating-input-label::before {
+  background: var(--msn-input-label-background, #fff);
+}
+
 /* Checkbox de configurações: mesma construção visual usada no Orkkut. */
 .msn-settings-checkbox {
   appearance: none;

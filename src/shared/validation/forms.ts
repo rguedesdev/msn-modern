@@ -16,6 +16,7 @@ export const passwordSchema = z
 export const authFormSchema = z
   .object({
     isRegistering: z.boolean(),
+    rememberMe: z.boolean(),
     email: emailSchema,
     displayName: z
       .string()

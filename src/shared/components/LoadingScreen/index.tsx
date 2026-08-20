@@ -5,8 +5,37 @@ import { MdClose, MdCropSquare, MdMinimize } from "react-icons/md";
 import MSNLogo3 from "../../../assets/images/msn3.jpg";
 import MessengerLogo from "../../../assets/images/messenger.png";
 
-function LoadingScreen() {
+interface LoadingScreenProps {
+  frameTop?: number;
+}
+
+function LoadingScreen({ frameTop }: LoadingScreenProps) {
   const appWindow = isTauri() ? getCurrentWebviewWindow() : null;
+  const alignedWithLogin = frameTop !== undefined;
+
+  const loadingContent = (
+    <>
+      <div className="relative rounded-[18px] border border-[#6694ad] bg-white p-2 shadow-[0_4px_12px_rgba(38,79,103,0.2)]">
+        <img
+          src={MSNLogo3}
+          className="h-[118px] w-[118px] rounded-[12px] object-contain"
+          alt="MSN Messenger"
+        />
+      </div>
+
+      <img
+        src={MessengerLogo}
+        className="relative mt-10 h-auto w-[235px] object-contain"
+        alt="MSN Messenger"
+      />
+
+      <div className="relative mt-8 h-1.5 w-full overflow-hidden rounded-full border border-white/80 bg-[#9abaca]/45 shadow-inner">
+        <div className="absolute left-[-40%] top-0 h-full w-[40%] rounded-full bg-gradient-to-r from-[#72c8e8] to-[#3195c2] animate-[loading_1.2s_linear_infinite]" />
+      </div>
+
+      <p className="relative mt-3 text-xs text-[#67899a]">Entrando...</p>
+    </>
+  );
 
   return (
     <section className="h-screen w-screen bg-transparent font-sans antialiased">
@@ -57,25 +86,14 @@ function LoadingScreen() {
           <span className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-white/60 blur-3xl" />
           <span className="pointer-events-none absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[#67c0e6]/20 blur-3xl" />
 
-          <div className="relative rounded-[18px] border border-[#6694ad] bg-white p-2 shadow-[0_4px_12px_rgba(38,79,103,0.2)]">
-            <img
-              src={MSNLogo3}
-              className="h-[118px] w-[118px] rounded-[12px] object-contain"
-              alt="MSN Messenger"
-            />
-          </div>
-
-          <img
-            src={MessengerLogo}
-            className="relative mt-10 h-auto w-[235px] object-contain"
-            alt="MSN Messenger"
-          />
-
-          <div className="relative mt-8 h-1.5 w-full overflow-hidden rounded-full border border-white/80 bg-[#9abaca]/45 shadow-inner">
-            <div className="absolute left-[-40%] top-0 h-full w-[40%] rounded-full bg-gradient-to-r from-[#72c8e8] to-[#3195c2] animate-[loading_1.2s_linear_infinite]" />
-          </div>
-
-          <p className="relative mt-3 text-xs text-[#67899a]">Entrando...</p>
+          {alignedWithLogin ? (
+            <div
+              className="fixed left-10 right-10 flex flex-col items-center"
+              style={{ top: frameTop }}
+            >
+              {loadingContent}
+            </div>
+          ) : loadingContent}
         </div>
 
         <style>{`

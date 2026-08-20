@@ -10,7 +10,7 @@ fn set_attention_with_kwin(window_title: &str, attention: bool) -> Result<(), St
     static SCRIPT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
     let sequence = SCRIPT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let script_name = format!("msn-modern-attention-{}-{sequence}", std::process::id());
+    let script_name = format!("msn-messenger-attention-{}-{sequence}", std::process::id());
     let script_path = std::env::temp_dir().join(format!("{script_name}.js"));
     let encoded_title = serde_json::to_string(window_title)
         .map_err(|error| format!("Não foi possível preparar o título da conversa: {error}"))?;

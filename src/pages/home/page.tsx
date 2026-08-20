@@ -594,6 +594,10 @@ const INITIAL_CONTACTS: Contact[] = [];
 const ENABLE_LISTENING_ACTIVITY = true;
 const SHARE_LISTENING_ACTIVITY_KEY = "msn-share-listening-activity";
 
+function shareListeningActivityKey(userId: string): string {
+  return `${SHARE_LISTENING_ACTIVITY_KEY}:${userId}`;
+}
+
 async function prepareProfileImage(file: File): Promise<File> {
   if (!/^image\/(?:jpeg|png|webp)$/.test(file.type)) {
     throw new Error("Escolha uma imagem JPG, PNG ou WebP");
@@ -723,7 +727,8 @@ function HomePage() {
   const [shareListeningActivity, setShareListeningActivity] = useState(
     () =>
       ENABLE_LISTENING_ACTIVITY &&
-      localStorage.getItem(SHARE_LISTENING_ACTIVITY_KEY) === "true",
+      Boolean(user?.id) &&
+      localStorage.getItem(shareListeningActivityKey(user!.id)) === "true",
   );
   const [currentMedia, setCurrentMedia] = useState<MediaInfo | null>(null);
 
@@ -1375,10 +1380,10 @@ function HomePage() {
   };
 
   useEffect(() => {
-    if (!ENABLE_LISTENING_ACTIVITY) return;
+    if (!ENABLE_LISTENING_ACTIVITY || !user?.id) return;
 
     localStorage.setItem(
-      SHARE_LISTENING_ACTIVITY_KEY,
+      shareListeningActivityKey(user.id),
       String(shareListeningActivity),
     );
 
@@ -1547,7 +1552,7 @@ function HomePage() {
       isDisposed = true;
       window.clearInterval(mediaPollTimer);
     };
-  }, [shareListeningActivity]);
+  }, [shareListeningActivity, user?.id]);
 
   useEffect(() => {
     if (!appWindow) return;
@@ -2297,7 +2302,7 @@ function HomePage() {
                     else clearAddContactErrors();
                     setIsAddingContact((current) => !current);
                   }}
-                  className="grid h-8 w-8 place-items-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
+                  className="msn-settings-trigger grid h-8 w-8 place-items-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
                 >
                   <MdOutlinePersonAddAlt size={21} />
                 </button>
@@ -2330,7 +2335,7 @@ function HomePage() {
               <button
                 type="button"
                 onClick={() => void handleLogout()}
-                className="rounded-md border border-transparent px-2 py-1 text-xs font-semibold transition-colors hover:border-white hover:bg-white/70"
+                className="msn-settings-trigger rounded-md border border-transparent px-2 py-1 text-xs font-semibold text-[#527b90] transition-colors hover:border-white hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-[#65afd0]/40"
               >
                 Sair
               </button>
@@ -2343,7 +2348,7 @@ function HomePage() {
         <form
           onSubmit={handleAddContact}
           noValidate
-          className="rounded-[10px] border border-[#8fb2c3] bg-white/80 px-3 pb-3 shadow-sm"
+          className="rounded-[10px] border border-[#8fb2c3] bg-white/80 px-3 pb-3 shadow-sm [&_input]:!shadow-none"
         >
           <Input
             inputName="Email do novo contato"
@@ -2364,14 +2369,14 @@ function HomePage() {
                 resetAddContact();
                 setIsAddingContact(false);
               }}
-              className="rounded px-3 py-1 text-xs text-[#52758a] hover:bg-white"
+              className="rounded border border-transparent px-3 py-1 text-xs text-[#52758a] transition-colors hover:border-red-300 hover:bg-red-50/80 hover:text-red-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isAddingContactPending}
-              className="rounded border border-[#3989b1] bg-[#3295c2] px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+              className="rounded border border-[#3989b1] bg-[#3295c2] px-3 py-1 text-xs font-semibold text-white transition-colors enabled:hover:border-[#28799f] enabled:hover:bg-[#2788b4] disabled:opacity-60"
             >
               {isAddingContactPending ? "Adicionando..." : "Adicionar"}
             </button>

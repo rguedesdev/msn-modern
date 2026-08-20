@@ -5,7 +5,7 @@ fn main() {
     #[cfg(target_os = "linux")]
     prefer_xwayland_when_available();
 
-    app_lib::run();
+    msn_messenger_lib::run();
 }
 
 #[cfg(target_os = "linux")]

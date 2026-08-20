@@ -40,7 +40,9 @@ import {
 
 function LoginPage() {
   const { user, signIn, signUp } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isAuthSubmissionPending, setIsAuthSubmissionPending] = useState(false);
+  const [loadingFrameTop, setLoadingFrameTop] = useState<number>();
   const [isRegistering, setIsRegistering] = useState(false);
   const [status, setStatus] =
     useState<keyof typeof STATUS_CONFIG>("online");
@@ -62,6 +64,7 @@ function LoginPage() {
     resolver: zodResolver(authFormSchema),
     defaultValues: {
       isRegistering: false,
+      rememberMe: false,
       email: "",
       displayName: "",
       password: "",
@@ -88,27 +91,28 @@ function LoginPage() {
   }, [appWindow]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 900);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (user) navigate("/home", { replace: true });
-  }, [navigate, user]);
+    if (user && !isAuthSubmissionPending) {
+      navigate("/home", { replace: true });
+    }
+  }, [isAuthSubmissionPending, navigate, user]);
 
   const handleAuthSubmit = handleSubmit(async (data) => {
+    setIsAuthSubmissionPending(true);
     try {
       if (data.isRegistering) {
         await signUp(data.email, data.displayName, data.password);
       } else {
-        await signIn(data.email, data.password);
+        await signIn(data.email, data.password, data.rememberMe);
       }
       sessionStorage.setItem(LOGIN_STATUS_STORAGE_KEY, status);
+      setLoadingFrameTop(
+        document.getElementById("login-profile-frame")?.getBoundingClientRect().top,
+      );
+      setIsTransitioning(true);
+      await new Promise((resolve) => window.setTimeout(resolve, 900));
       navigate("/home", { replace: true });
     } catch (error) {
+      setIsAuthSubmissionPending(false);
       setError("root.server", {
         message: error instanceof Error ? error.message : "Não foi possível autenticar",
       });
@@ -117,8 +121,8 @@ function LoginPage() {
 
   return (
     <>
-      {loading ? (
-        <LoadingScreen />
+      {isTransitioning ? (
+        <LoadingScreen frameTop={loadingFrameTop} />
       ) : (
         <>
           <section className="relative flex h-screen flex-col items-center justify-center overflow-hidden bg-transparent font-sans antialiased [text-rendering:geometricPrecision]">
@@ -166,7 +170,7 @@ function LoginPage() {
               </header>
 
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 py-6">
-                <div className="flex justify-center">
+                <div id="login-profile-frame" className="flex justify-center">
                   <PictureFrame
                     frame="status"
                     status={toContactStatus(status)}
@@ -181,11 +185,8 @@ function LoginPage() {
                 </div>
 
                 <h1 className="mt-4 text-lg font-semibold text-[#284f65]">
-                  Entrar no Messenger
+                  Entrar no MSN
                 </h1>
-                <p className="mt-1 text-center text-xs text-[#67899a]">
-                  Converse com seus contatos e veja quem está online.
-                </p>
 
                 <div className="mt-3 flex items-center gap-2">
                   <p className="text-xs font-medium text-[#52758a]">Status:</p>
@@ -271,7 +272,7 @@ function LoginPage() {
                 </div>
 
                 <form
-                  className="contents [&_input]:!shadow-none"
+                  className="contents [--msn-input-label-background:#e6f3f9] [&_input]:!shadow-none"
                   onSubmit={handleAuthSubmit}
                   noValidate
                 >
@@ -324,7 +325,11 @@ function LoginPage() {
 
                   {!isRegistering && (
                     <div className="mt-3 w-full rounded-[9px] border border-white/75 bg-white/35 px-3 pb-3 pt-0.5">
-                      <Checkbox checkboxText="Manter conectado nesta execução" />
+                      <Checkbox
+                        checkboxText="Manter conectado após fechar o aplicativo"
+                        disabled={isSubmitting}
+                        {...register("rememberMe")}
+                      />
                     </div>
                   )}
 
