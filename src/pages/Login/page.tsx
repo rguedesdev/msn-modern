@@ -10,6 +10,8 @@ import { Input } from "../../shared/components/Input";
 import { Footer } from "../../shared/components/Footer";
 import { LoadingScreen } from "../../shared/components/LoadingScreen";
 import { Checkbox } from "../../shared/components/Checkbox";
+import { PictureFrame } from "../../shared/constants/PictureFrame/page";
+import { toContactStatus } from "../../shared/constants/ContactStatusFrame/page";
 
 // Constants
 import {
@@ -124,9 +126,9 @@ function LoginPage() {
                 data-tauri-drag-region
                 className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
               >
-                <span className="flex items-center" aria-hidden="true">
-                  <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
-                  <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
+                <span className="msn-title-orbs flex items-center" aria-hidden="true">
+                  <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
+                  <span className="msn-title-orb msn-title-orb--green z-10 -ml-1 h-3.5 w-3.5" />
                 </span>
                 <span
                   data-tauri-drag-region
@@ -163,11 +165,17 @@ function LoginPage() {
               </header>
 
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 py-6">
-                <div className="rounded-[18px] border border-[#6694ad] bg-gradient-to-br from-white via-[#e9f7fc] to-[#a9d9eb] p-1.5 shadow-[0_4px_12px_rgba(38,79,103,0.2)]">
-                  <img
-                    className="h-[104px] w-[110px] rounded-[13px] border border-white object-cover"
-                    src={MSNLogo2}
-                    alt="MSN Logo"
+                <div className="flex justify-center">
+                  <PictureFrame
+                    frame="status"
+                    status={toContactStatus(status)}
+                    fallback={(
+                      <img
+                        className="relative z-10 h-[104px] w-[110px] rounded-lg object-cover"
+                        src={MSNLogo2}
+                        alt="MSN Logo"
+                      />
+                    )}
                   />
                 </div>
 

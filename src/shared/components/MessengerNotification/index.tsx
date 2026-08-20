@@ -42,9 +42,9 @@ function MessengerNotification({
       className={`${animate ? "animate-msn-toast" : ""} ${onActivate ? "cursor-pointer" : ""} flex h-[170px] w-[310px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#6694ad] bg-gradient-to-b from-[#f8fcfe] via-[#edf7fb] to-[#d8edf6] font-sans text-[#213a52] antialiased shadow-[0_5px_16px_rgba(30,66,91,0.38)] [text-rendering:geometricPrecision]`}
     >
       <div className="flex h-8 items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        <span className="flex items-center" aria-hidden="true">
-          <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
-          <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
+        <span className="msn-title-orbs flex items-center" aria-hidden="true">
+          <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
+          <span className="msn-title-orb msn-title-orb--green z-10 -ml-1 h-3.5 w-3.5" />
         </span>
         <span className="flex-1 text-xs font-semibold text-[#315b72]">
           MSN Messenger

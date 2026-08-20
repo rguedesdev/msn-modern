@@ -889,12 +889,18 @@ function HomePage() {
       text: "acabou de entrar.",
     });
 
-    const audio = onlineAudioRef.current;
-    if (!audio) return;
-    audio.pause();
-    audio.currentTime = 0;
+    const previousAudio = onlineAudioRef.current;
+    previousAudio?.pause();
+
+    const audio = new Audio(onlineSound);
+    audio.preload = "auto";
+    audio.volume = 1;
+    onlineAudioRef.current = audio;
+
     void audio.play().catch((error) => {
-      console.error("Erro ao reproduzir notificação de contato online:", error);
+      if (onlineAudioRef.current === audio) {
+        console.error("Erro ao reproduzir notificação de contato online:", error);
+      }
     });
   }, [showNotification]);
 
@@ -1554,20 +1560,9 @@ function HomePage() {
   }, [appWindow]);
 
   useEffect(() => {
-    const audio = new Audio(onlineSound);
-    audio.preload = "auto";
-    audio.volume = 1;
-    audio.load();
-    onlineAudioRef.current = audio;
-
     return () => {
-      audio.pause();
+      onlineAudioRef.current?.pause();
       onlineAudioRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
       messageAudioRef.current?.pause();
       messageAudioRef.current = null;
     };
@@ -1646,9 +1641,9 @@ function HomePage() {
           data-tauri-drag-region
           className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
         >
-          <span className="flex items-center" aria-hidden="true">
-            <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
-            <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
+          <span className="msn-title-orbs flex items-center" aria-hidden="true">
+            <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
+            <span className="msn-title-orb msn-title-orb--green z-10 -ml-1 h-3.5 w-3.5" />
           </span>
           <span
             data-tauri-drag-region
@@ -1824,7 +1819,7 @@ function HomePage() {
                 <details className="group overflow-hidden rounded-lg border border-white/80 bg-white/55">
                   <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-xs font-semibold text-[#315f77] transition hover:bg-white/65 [&::-webkit-details-marker]:hidden">
                     <MdPalette aria-hidden="true" size={17} />
-                    <span className="flex-1">Moldura e nome</span>
+                    <span className="flex-1">Moldura e Fonte</span>
                     <MdArrowDropDown
                       aria-hidden="true"
                       size={18}
@@ -1835,7 +1830,7 @@ function HomePage() {
                   <div className="space-y-4 border-t border-[#c7dce5] px-3 py-3">
                     <fieldset disabled={isSavingAppearance}>
                       <legend className="mb-2 text-[11px] font-semibold text-[#52758a]">
-                        Moldura da foto
+                        Estilo de Moldura
                       </legend>
                       <div className="grid grid-cols-2 gap-1.5">
                         <button
@@ -1892,7 +1887,7 @@ function HomePage() {
 
                     <fieldset disabled={isSavingAppearance}>
                       <legend className="mb-2 text-[11px] font-semibold text-[#52758a]">
-                        Estilo do nome
+                        Cor da Fonte
                       </legend>
                       <div className="grid grid-cols-2 gap-1.5">
                         <button
@@ -2284,11 +2279,27 @@ function HomePage() {
                 >
                   <MdOutlinePersonAddAlt size={21} />
                 </button>
-                {[<ImMakeGroup key="group" size={15} />, <TbPhoneCall key="call" size={19} />, <AiOutlineVideoCamera key="video" size={19} />].map((icon) => (
+                {[
+                  {
+                    label: "Criar grupo (em breve)",
+                    icon: <ImMakeGroup aria-hidden="true" size={15} />,
+                  },
+                  {
+                    label: "Iniciar chamada (em breve)",
+                    icon: <TbPhoneCall aria-hidden="true" size={19} />,
+                  },
+                  {
+                    label: "Iniciar videochamada (em breve)",
+                    icon: <AiOutlineVideoCamera aria-hidden="true" size={19} />,
+                  },
+                ].map(({ label, icon }) => (
                   <button
-                    key={icon.key}
+                    key={label}
                     type="button"
-                    className="grid h-8 w-8 place-items-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
+                    disabled
+                    aria-label={label}
+                    title={label}
+                    className="grid h-8 w-8 cursor-not-allowed place-items-center rounded-md border border-transparent opacity-40"
                   >
                     {icon}
                   </button>
@@ -2313,7 +2324,7 @@ function HomePage() {
           className="rounded-[10px] border border-[#8fb2c3] bg-white/80 px-3 pb-3 shadow-sm"
         >
           <Input
-            inputName="E-mail exato do novo contato"
+            inputName="Email do novo contato"
             type="email"
             disabled={isAddingContactPending}
             aria-invalid={Boolean(addContactErrors.email)}

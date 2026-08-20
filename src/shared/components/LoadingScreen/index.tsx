@@ -15,9 +15,9 @@ function LoadingScreen() {
           data-tauri-drag-region
           className="flex h-9 shrink-0 select-none items-center gap-2 rounded-t-[13px] border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
         >
-          <span className="flex items-center" aria-hidden="true">
-            <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
-            <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
+          <span className="msn-title-orbs flex items-center" aria-hidden="true">
+            <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
+            <span className="msn-title-orb msn-title-orb--green z-10 -ml-1 h-3.5 w-3.5" />
           </span>
           <span
             data-tauri-drag-region
@@ -60,7 +60,7 @@ function LoadingScreen() {
           <div className="relative rounded-[18px] border border-[#6694ad] bg-white p-2 shadow-[0_4px_12px_rgba(38,79,103,0.2)]">
             <img
               src={MSNLogo3}
-              className="h-[118px] w-[168px] rounded-[12px] object-cover"
+              className="h-[118px] w-[118px] rounded-[12px] object-contain"
               alt="MSN Messenger"
             />
           </div>

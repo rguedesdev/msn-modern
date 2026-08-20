@@ -1504,7 +1504,7 @@ function ChatWindow() {
   const nudgeSurfaceRef = useRef<HTMLElement>(null);
   const hasPositionedInitialMessagesRef = useRef(false);
   const nudgeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const nudgeResetTimerRef = useRef<number | undefined>(undefined);
+  const nudgeAnimationRef = useRef<Animation | null>(null);
   const isTaskbarHighlightedRef = useRef(false);
   const taskbarBlinkIntervalRef = useRef<number | undefined>(undefined);
   const taskbarBlinkEndTimerRef = useRef<number | undefined>(undefined);
@@ -1571,6 +1571,7 @@ function ChatWindow() {
   const [contactStatus, setContactStatus] = useState(
     searchParams.get("status") || "offline",
   );
+  const isContactOffline = contactStatus === "offline" || contactStatus === "invisivel";
   const [contactName, setContactName] = useState(
     searchParams.get("name") || `Contato ${id}`,
   );
@@ -2013,10 +2014,8 @@ function ChatWindow() {
     return () => {
       nudgeAudioRef.current?.pause();
       nudgeAudioRef.current = null;
-      if (nudgeResetTimerRef.current !== undefined) {
-        window.clearTimeout(nudgeResetTimerRef.current);
-        nudgeResetTimerRef.current = undefined;
-      }
+      nudgeAnimationRef.current?.cancel();
+      nudgeAnimationRef.current = null;
     };
   }, []);
 
@@ -2024,18 +2023,30 @@ function ChatWindow() {
   const triggerNudgeEffect = useCallback(() => {
     const nudgeSurface = nudgeSurfaceRef.current;
     if (nudgeSurface) {
-      nudgeSurface.classList.remove("animate-nudge");
-      void nudgeSurface.offsetWidth;
-      nudgeSurface.classList.add("animate-nudge");
+      nudgeAnimationRef.current?.cancel();
+      const animation = nudgeSurface.animate([
+        { transform: "translate(0, 0) rotate(0deg)" },
+        { transform: "translate(-4px, -4px) rotate(-1deg)" },
+        { transform: "translate(4px, 4px) rotate(1deg)" },
+        { transform: "translate(-4px, -4px) rotate(-1deg)" },
+        { transform: "translate(4px, 4px) rotate(1deg)" },
+        { transform: "translate(-4px, -4px) rotate(-1deg)" },
+        { transform: "translate(4px, 4px) rotate(1deg)" },
+        { transform: "translate(-4px, -4px) rotate(-1deg)" },
+        { transform: "translate(4px, 4px) rotate(1deg)" },
+        { transform: "translate(-4px, -4px) rotate(-1deg)" },
+        { transform: "translate(0, 0) rotate(0deg)" },
+      ], {
+        duration: 500,
+        easing: "ease-in-out",
+      });
+      nudgeAnimationRef.current = animation;
+      animation.onfinish = () => {
+        if (nudgeAnimationRef.current === animation) {
+          nudgeAnimationRef.current = null;
+        }
+      };
     }
-
-    if (nudgeResetTimerRef.current !== undefined) {
-      window.clearTimeout(nudgeResetTimerRef.current);
-    }
-    nudgeResetTimerRef.current = window.setTimeout(() => {
-      nudgeSurfaceRef.current?.classList.remove("animate-nudge");
-      nudgeResetTimerRef.current = undefined;
-    }, 500);
 
     if (appWindow) {
       void (async () => {
@@ -2077,15 +2088,18 @@ function ChatWindow() {
   }, [searchParams, triggerNudgeEffect]);
 
   const handleSendNudge = async () => {
-    triggerNudgeEffect();
-
     const socket = realtimeSocketRef.current;
-    if (!socket || !id) return;
+    if (
+      !socket ||
+      !id ||
+      isContactOffline
+    ) return;
     try {
-      await socket.timeout(5_000).emitWithAck(
+      const response = await socket.timeout(5_000).emitWithAck(
         "nudge:send",
         { conversationId: id },
-      );
+      ) as { delivered: boolean };
+      if (response.delivered) triggerNudgeEffect();
     } catch (error) {
       console.error("Não foi possível chamar a atenção:", error);
     }
@@ -2237,9 +2251,9 @@ function ChatWindow() {
           data-tauri-drag-region
           className="relative flex h-9 shrink-0 select-none items-center gap-2 border-b border-[#7fa9bf] bg-gradient-to-r from-[#8fcbe8] via-[#d4eefb] to-[#f4fbfe] pl-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
         >
-          <span className="flex items-center" aria-hidden="true">
-            <span className="relative h-2.5 w-2.5 rounded-full bg-[#43a9d7] ring-1 ring-white" />
-            <span className="relative z-10 -ml-1 h-3.5 w-3.5 rounded-full bg-[#71bf45] ring-1 ring-white" />
+          <span className="msn-title-orbs flex items-center" aria-hidden="true">
+            <span className="msn-title-orb msn-title-orb--blue h-2.5 w-2.5 -translate-x-[0.5px]" />
+            <span className="msn-title-orb msn-title-orb--green z-10 -ml-1 h-3.5 w-3.5" />
           </span>
           <span
             data-tauri-drag-region
@@ -2298,7 +2312,7 @@ function ChatWindow() {
           </aside>
 
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-            <header className="flex items-start justify-between border-b border-[#b9d3df] px-1 pb-2.5">
+            <header className="flex items-start justify-between px-1 pb-2.5">
               <div className="min-w-0">
                 <h1 className="flex min-w-0 items-center gap-1 text-lg font-semibold text-[#284f65]">
                   <span
@@ -2743,9 +2757,12 @@ function ChatWindow() {
 
                 <button
                   type="button"
-                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors hover:border-white hover:bg-white/70"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={handleSendNudge}
-                  title="Chamar a atenção"
+                  disabled={isContactOffline}
+                  title={isContactOffline
+                    ? "Não é possível chamar a atenção de um contato offline"
+                    : "Chamar a atenção"}
                 >
                   <img
                     src={NudgeIconComparison}
@@ -2754,39 +2771,47 @@ function ChatWindow() {
                   />
                 </button>
 
+                <span aria-hidden="true" className="ml-[10px] mr-1 text-[#8aa9b8]">
+                  |
+                </span>
+
                 <button
                   type="button"
-                  title="Iniciar conversa por voz"
-                  className="rounded-md border border-transparent p-2 transition-colors hover:border-white hover:bg-white/70"
+                  disabled
+                  aria-label="Iniciar conversa por voz (em breve)"
+                  title="Iniciar conversa por voz (em breve)"
+                  className="cursor-not-allowed rounded-md border border-transparent p-2 opacity-40"
                 >
-                  <MdVoiceChat className="text-[#527b90]" size={20} />
+                  <MdVoiceChat aria-hidden="true" className="text-[#527b90]" size={20} />
                 </button>
                 <button
                   type="button"
-                  title="Ativar microfone"
-                  className="rounded-md border border-transparent p-2 transition-colors hover:border-white hover:bg-white/70"
+                  disabled
+                  aria-label="Ativar microfone (em breve)"
+                  title="Ativar microfone (em breve)"
+                  className="cursor-not-allowed rounded-md border border-transparent p-2 opacity-40"
                 >
-                  <FaMicrophoneAlt className="text-[#527b90]" size={18} />
+                  <FaMicrophoneAlt aria-hidden="true" className="text-[#527b90]" size={18} />
                 </button>
                 <button
                   type="button"
-                  title="Configurar áudio"
-                  className="rounded-md border border-transparent p-2 transition-colors hover:border-white hover:bg-white/70"
+                  disabled
+                  aria-label="Configurar áudio (em breve)"
+                  title="Configurar áudio (em breve)"
+                  className="cursor-not-allowed rounded-md border border-transparent p-2 opacity-40"
                 >
-                  <FaHeadphonesAlt className="text-[#527b90]" size={18} />
+                  <FaHeadphonesAlt aria-hidden="true" className="text-[#527b90]" size={18} />
                 </button>
                 <button
                   type="button"
-                  title={
-                    isVideoCallOpen
-                      ? "Encerrar exibição de vídeo"
-                      : "Iniciar conversa por vídeo"
-                  }
+                  disabled
+                  aria-label="Iniciar conversa por vídeo (em breve)"
+                  title="Iniciar conversa por vídeo (em breve)"
                   aria-pressed={isVideoCallOpen}
                   onClick={handleToggleVideoCall}
-                  className="rounded-md border border-transparent p-2 transition-colors hover:border-white hover:bg-white/70"
+                  className="cursor-not-allowed rounded-md border border-transparent p-2 opacity-40"
                 >
-                  <MdOutlineVideoChat className="text-[#527b90]" size={20} />
+                  <MdOutlineVideoChat aria-hidden="true" className="text-[#527b90]" size={20} />
                 </button>
               </div>
 
