@@ -1,5 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type {
   NameEffect,
   ProfileFrame,
@@ -29,11 +30,13 @@ const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\
   ?? "http://127.0.0.1:3333";
 const SESSION_KEY = "msn-modern:session";
 const SESSION_PERSISTENCE_KEY = "msn-modern:session-persistence";
+const SESSION_EXECUTION_KEY = "msn-modern:session-execution";
 const REFRESH_LOCK_NAME = "msn-modern:refresh-session";
 
 export type SessionPersistence = "local" | "session";
 
 let refreshPromise: Promise<AuthSession | null> | null = null;
+let sessionStorageInitialized = false;
 
 const apiFetch: typeof fetch = isTauri()
   ? tauriFetch
@@ -60,18 +63,48 @@ export class ApiError extends Error {
   }
 }
 
+function initializeSessionStorage(): void {
+  if (sessionStorageInitialized || !isTauri()) return;
+  sessionStorageInitialized = true;
+
+  // Somente a janela principal decide se uma sessão temporária pertence à
+  // execução atual. Janelas de chat compartilham a sessão, mas não a encerram.
+  if (getCurrentWindow().label !== "main") return;
+
+  const currentWindowSession = sessionStorage.getItem(SESSION_KEY);
+  if (currentWindowSession) {
+    // Migra sessões temporárias criadas antes do suporte a múltiplas janelas.
+    localStorage.setItem(SESSION_KEY, currentWindowSession);
+    localStorage.setItem(SESSION_PERSISTENCE_KEY, "session");
+    sessionStorage.setItem(SESSION_EXECUTION_KEY, "active");
+    sessionStorage.removeItem(SESSION_KEY);
+    return;
+  }
+
+  if (
+    localStorage.getItem(SESSION_PERSISTENCE_KEY) === "session" &&
+    sessionStorage.getItem(SESSION_EXECUTION_KEY) !== "active"
+  ) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_PERSISTENCE_KEY);
+  }
+}
+
 export function getSession(): AuthSession | null {
   try {
+    initializeSessionStorage();
     const localSession = localStorage.getItem(SESSION_KEY);
-    const isExplicitlyPersistent =
-      localStorage.getItem(SESSION_PERSISTENCE_KEY) === "local";
+    const persistence = localStorage.getItem(SESSION_PERSISTENCE_KEY);
+    const canUseLocalSession = persistence === "local" || (
+      isTauri() && persistence === "session"
+    );
 
     // Sessões de versões anteriores eram persistidas sem consentimento.
-    if (localSession && !isExplicitlyPersistent) {
+    if (localSession && !canUseLocalSession) {
       localStorage.removeItem(SESSION_KEY);
     }
 
-    const value = (isExplicitlyPersistent ? localSession : null)
+    const value = (canUseLocalSession ? localSession : null)
       ?? sessionStorage.getItem(SESSION_KEY);
     return value ? JSON.parse(value) as AuthSession : null;
   } catch {
@@ -80,10 +113,12 @@ export function getSession(): AuthSession | null {
 }
 
 function getSessionPersistence(): SessionPersistence | null {
+  initializeSessionStorage();
+  const persistence = localStorage.getItem(SESSION_PERSISTENCE_KEY);
   if (
-    localStorage.getItem(SESSION_PERSISTENCE_KEY) === "local" &&
+    (persistence === "local" || (isTauri() && persistence === "session")) &&
     localStorage.getItem(SESSION_KEY)
-  ) return "local";
+  ) return persistence;
   if (sessionStorage.getItem(SESSION_KEY)) return "session";
   return null;
 }
@@ -97,6 +132,14 @@ export function saveSession(
     localStorage.setItem(SESSION_KEY, serializedSession);
     localStorage.setItem(SESSION_PERSISTENCE_KEY, "local");
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_EXECUTION_KEY);
+  } else if (isTauri()) {
+    // localStorage é compartilhado pelas WebViews; o marcador em
+    // sessionStorage limita a validade à execução da janela principal.
+    localStorage.setItem(SESSION_KEY, serializedSession);
+    localStorage.setItem(SESSION_PERSISTENCE_KEY, "session");
+    sessionStorage.setItem(SESSION_EXECUTION_KEY, "active");
+    sessionStorage.removeItem(SESSION_KEY);
   } else {
     sessionStorage.setItem(SESSION_KEY, serializedSession);
     localStorage.removeItem(SESSION_KEY);
@@ -109,6 +152,7 @@ export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SESSION_PERSISTENCE_KEY);
   sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(SESSION_EXECUTION_KEY);
   window.dispatchEvent(new Event("msn-auth-changed"));
 }
 

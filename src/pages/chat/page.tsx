@@ -1722,7 +1722,15 @@ function ChatWindow() {
       setSendError(validation.error.issues[0]?.message ?? "Mensagem inválida");
       return;
     }
-    if (!id || !user || !contactUserId || isSending) return;
+    if (!user) {
+      setSendError("Sua sessão não está disponível nesta janela. Feche a conversa e abra novamente.");
+      return;
+    }
+    if (!id || !contactUserId) {
+      setSendError("Não foi possível identificar esta conversa.");
+      return;
+    }
+    if (isSending) return;
     const validatedMessage = validation.data;
     setIsSending(true);
     setSendError("");
