@@ -84,7 +84,7 @@ jobs:
         shell: pwsh
         run: |
           $files = @(
-            Get-Item "src-tauri/target/release/app.exe"
+            Get-Item "src-tauri/target/release/msn-messenger.exe"
             Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe"
           )
           if ($files.Count -lt 2) {
@@ -97,7 +97,7 @@ jobs:
         shell: pwsh
         run: |
           $artifacts = @(
-            Get-Item "src-tauri/target/release/app.exe"
+            Get-Item "src-tauri/target/release/msn-messenger.exe"
             Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe"
           )
           $checksums = foreach ($artifact in $artifacts) {
@@ -113,6 +113,6 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
-            src-tauri/target/release/app.exe
+            src-tauri/target/release/msn-messenger.exe
           if-no-files-found: error
           retention-days: 14
