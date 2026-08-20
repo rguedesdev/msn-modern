@@ -9,7 +9,12 @@ const configSchema = z.object({
   JWT_SECRET: z.string().min(32),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
-  CORS_ORIGIN: z.string().min(1).default("http://localhost:1420"),
+  CORS_ORIGIN: z
+    .string()
+    .min(1)
+    .default(
+      "http://localhost:5173,http://127.0.0.1:5173,tauri://localhost,http://tauri.localhost,https://tauri.localhost",
+    ),
 });
 
 export type Config = z.infer<typeof configSchema>;

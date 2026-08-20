@@ -10,7 +10,7 @@ import {
 
 export type AppTheme = "light" | "dark";
 
-const THEME_STORAGE_KEY = "msn-modern:theme";
+const THEME_STORAGE_KEY = "msn-modern:theme:v2";
 
 interface ThemeContextValue {
   theme: AppTheme;
@@ -23,8 +23,7 @@ function getInitialTheme(): AppTheme {
   const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
   if (storedTheme === "light" || storedTheme === "dark") return storedTheme;
 
-  // O tema escuro é a nova experiência padrão; o claro continua disponível.
-  return "dark";
+  return "light";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

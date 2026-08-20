@@ -85,6 +85,7 @@ async function performSessionRefresh(
   try {
     response = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
+      cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken: currentSession.refreshToken }),
     });
@@ -148,7 +149,11 @@ export async function apiRequest<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, { ...init, headers });
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+    });
   } catch {
     throw new ApiError(0, `Não foi possível conectar ao backend em ${API_URL}`);
   }

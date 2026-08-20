@@ -40,6 +40,11 @@ export async function buildApp(config: Config): Promise<FastifyInstance> {
     limits: { files: 1, fields: 0, parts: 1, fileSize: 5 * 1024 * 1024 },
   });
 
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("Cache-Control", "no-store");
+    return payload;
+  });
+
   app.decorate("authenticate", async (request) => {
     await request.jwtVerify();
   });
