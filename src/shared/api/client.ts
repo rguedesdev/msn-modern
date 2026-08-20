@@ -1,3 +1,5 @@
+import { isTauri } from "@tauri-apps/api/core";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type {
   NameEffect,
   ProfileFrame,
@@ -29,6 +31,10 @@ const SESSION_KEY = "msn-modern:session";
 const REFRESH_LOCK_NAME = "msn-modern:refresh-session";
 
 let refreshPromise: Promise<AuthSession | null> | null = null;
+
+const apiFetch: typeof fetch = isTauri()
+  ? tauriFetch
+  : globalThis.fetch.bind(globalThis);
 
 export class ApiError extends Error {
   readonly status: number;
@@ -83,9 +89,8 @@ async function performSessionRefresh(
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/auth/refresh`, {
+    response = await apiFetch(`${API_URL}/auth/refresh`, {
       method: "POST",
-      cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken: currentSession.refreshToken }),
     });
@@ -149,11 +154,7 @@ export async function apiRequest<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, {
-      ...init,
-      headers,
-      cache: "no-store",
-    });
+    response = await apiFetch(`${API_URL}${path}`, { ...init, headers });
   } catch {
     throw new ApiError(0, `Não foi possível conectar ao backend em ${API_URL}`);
   }

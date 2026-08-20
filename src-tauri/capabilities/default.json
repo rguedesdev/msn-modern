@@ -23,6 +23,14 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-create",
     "core:event:allow-emit",
-    "core:event:allow-listen"
+    "core:event:allow-listen",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://*.ngrok-free.app" },
+        { "url": "http://127.0.0.1:3333" },
+        { "url": "http://localhost:3333" }
+      ]
+    }
   ]
 }

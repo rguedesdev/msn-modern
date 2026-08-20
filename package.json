@@ -17,6 +17,7 @@
     "@hookform/resolvers": "^5.9.0",
     "@react-icons/all-files": "^4.1.0",
     "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-http": "^2.5.9",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-hook-form": "^7.85.0",
