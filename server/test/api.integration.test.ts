@@ -62,14 +62,14 @@ describe("API com MongoDB", () => {
     const bobAuth = { authorization: `Bearer ${bob.accessToken}` };
 
     expect(alice.user).toMatchObject({
-      ownedProfileFrames: ["aurora"],
-      ownedNameEffects: ["aurora"],
+      ownedProfileFrames: ["aurora", "diamond"],
+      ownedNameEffects: ["aurora", "diamond"],
     });
     const testUnlockedAppearance = await app.inject({
       method: "PATCH",
       url: "/me/profile",
       headers: aliceAuth,
-      payload: { profileFrame: "aurora", nameEffect: "aurora" },
+      payload: { profileFrame: "diamond", nameEffect: "diamond" },
     });
     expect(testUnlockedAppearance.statusCode).toBe(200);
 
@@ -97,8 +97,8 @@ describe("API com MongoDB", () => {
     expect(updatedAppearance.json().user).toMatchObject({
       profileFrame: "matrix",
       nameEffect: "gold",
-      ownedProfileFrames: ["matrix", "aurora"],
-      ownedNameEffects: ["gold", "aurora"],
+      ownedProfileFrames: ["matrix", "aurora", "diamond"],
+      ownedNameEffects: ["gold", "aurora", "diamond"],
     });
 
     const updatedProfile = await app.inject({

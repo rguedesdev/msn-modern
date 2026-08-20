@@ -20,4 +20,7 @@ export type ProfileFrame = "status" | ProfileStyleKey;
 export type NameEffect = "default" | ProfileStyleKey;
 
 // Acesso temporário para validação visual antes da integração com a loja.
-export const TEST_UNLOCKED_PROFILE_STYLE_KEYS: readonly ProfileStyleKey[] = ["aurora"];
+export const TEST_UNLOCKED_PROFILE_STYLE_KEYS: readonly ProfileStyleKey[] = [
+  "aurora",
+  "diamond",
+];
