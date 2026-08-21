@@ -41,7 +41,13 @@ import {
 import { useAuth } from "../../shared/auth/AuthContext";
 import { resolveApiAssetUrl } from "../../shared/api/client";
 import { decryptEnvelope, encryptForDevice, listPublicKeys, registerCurrentDevice } from "../../shared/api/e2ee";
-import { listEncryptedMessages, sendEncryptedMessage, type ApiEncryptedMessage } from "../../shared/api/messages";
+import {
+  listEncryptedMessages,
+  markMessagesStatus,
+  sendEncryptedMessage,
+  type ApiEncryptedMessage,
+  type MessageStatusUpdate,
+} from "../../shared/api/messages";
 import {
   connectRealtime,
   setConversationTyping,
@@ -50,19 +56,22 @@ import {
 import {
   TYPING_CHANGED_EVENT,
 } from "../../shared/constants/TypingEvents";
+import { MESSAGE_STATUS_CHANGED_EVENT } from "../../shared/constants/MessageEvents";
 import { chatMessageSchema } from "../../shared/validation/forms";
 
 // Icons
 import {
   MdClose,
   MdCropSquare,
+  MdDone,
+  MdDoneAll,
   MdKeyboardArrowDown,
   MdMinimize,
-  MdOutlineImage,
   MdOutlineVideoChat,
   MdVoiceChat,
 } from "react-icons/md";
 import { FaMicrophoneAlt, FaHeadphonesAlt } from "react-icons/fa";
+import { FcAddImage } from "react-icons/fc";
 
 // Imagens e Sons
 import NudgeIconComparison from "../../assets/images/msn-nudge-icon-2.png";
@@ -1551,6 +1560,14 @@ function formatReceivedAt(receivedAt: number) {
   return `${formattedDate} às ${formattedTime} hs`;
 }
 
+function formatMessageTime(sentAt: number) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(sentAt));
+}
+
 function ChatWindow() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -1583,6 +1600,7 @@ function ChatWindow() {
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
     id ? getChatMessages(id) : [],
   );
+  const messagesRef = useRef(messages);
   const messageInputRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const emoticonPickerRef = useRef<HTMLDivElement>(null);
@@ -1610,6 +1628,10 @@ function ChatWindow() {
     EXCLUSIVE_EMOTICON_PACKS.find(
       (pack) => pack.id === activeExclusivePackId,
     ) ?? EXCLUSIVE_EMOTICON_PACKS[0];
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (!isEmoticonPickerOpen) return;
@@ -1969,6 +1991,9 @@ function ChatWindow() {
         author: "me",
         text: validatedMessage,
         image: image ?? undefined,
+        sentAt: new Date(sent.sentAt).getTime(),
+        deliveredAt: sent.deliveredAt ? new Date(sent.deliveredAt).getTime() : undefined,
+        readAt: sent.readAt ? new Date(sent.readAt).getTime() : undefined,
       };
       setMessages((current) => {
         const updated = [...current, chatMessage];
@@ -2018,12 +2043,98 @@ function ChatWindow() {
           ? decryptedPayload.text
           : decryptedPayload.image.caption ?? "",
         image: decryptedPayload.type === "image" ? decryptedPayload.image : undefined,
+        sentAt: new Date(apiMessage.sentAt).getTime(),
         receivedAt: apiMessage.senderUserId === user.id ? undefined : new Date(apiMessage.sentAt).getTime(),
+        deliveredAt: apiMessage.deliveredAt ? new Date(apiMessage.deliveredAt).getTime() : undefined,
+        readAt: apiMessage.readAt ? new Date(apiMessage.readAt).getTime() : undefined,
       };
     } catch {
       return null;
     }
   }, [id, user]);
+
+  const applyMessageStatuses = useCallback((statuses: MessageStatusUpdate[]) => {
+    if (!id || statuses.length === 0) return;
+    const statusByMessageId = new Map(
+      statuses.map((status) => [status.messageId, status]),
+    );
+    setMessages((currentMessages) => {
+      let changed = false;
+      const updatedMessages = currentMessages.map((chatMessage) => {
+        const status = statusByMessageId.get(String(chatMessage.id));
+        if (!status) return chatMessage;
+        const deliveredAt = status.deliveredAt
+          ? new Date(status.deliveredAt).getTime()
+          : chatMessage.deliveredAt;
+        const readAt = status.readAt
+          ? new Date(status.readAt).getTime()
+          : chatMessage.readAt;
+        if (
+          deliveredAt === chatMessage.deliveredAt &&
+          readAt === chatMessage.readAt
+        ) {
+          return chatMessage;
+        }
+        changed = true;
+        return { ...chatMessage, deliveredAt, readAt };
+      });
+      if (!changed) return currentMessages;
+      messagesRef.current = updatedMessages;
+      saveChatMessages(id, updatedMessages);
+      return updatedMessages;
+    });
+  }, [id]);
+
+  const acknowledgeReceivedMessages = useCallback(async (
+    messageIds: string[],
+    status: "delivered" | "read",
+  ) => {
+    if (!id || messageIds.length === 0) return;
+    try {
+      const statuses = await markMessagesStatus(id, messageIds, status);
+      applyMessageStatuses(statuses);
+    } catch (error) {
+      console.error(`Não foi possível confirmar mensagem como ${status}:`, error);
+    }
+  }, [applyMessageStatuses, id]);
+
+  const isConversationFocused = useCallback(async () => {
+    if (!appWindow) {
+      return document.visibilityState === "visible" && document.hasFocus();
+    }
+    const [isFocused, isMinimized] = await Promise.all([
+      appWindow.isFocused(),
+      appWindow.isMinimized(),
+    ]);
+    return isFocused && !isMinimized;
+  }, [appWindow]);
+
+  const markVisibleMessagesAsRead = useCallback(() => {
+    const unreadMessageIds = messagesRef.current
+      .filter((chatMessage) => chatMessage.author === "contact" && !chatMessage.readAt)
+      .map((chatMessage) => String(chatMessage.id));
+    void acknowledgeReceivedMessages(unreadMessageIds, "read");
+  }, [acknowledgeReceivedMessages]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<MessageStatusUpdate>(MESSAGE_STATUS_CHANGED_EVENT, ({ payload }) => {
+      applyMessageStatuses([payload]);
+    }).then((stopListening) => {
+      if (disposed) stopListening();
+      else unlisten = stopListening;
+    }).catch((error) => {
+      console.error("Erro ao receber status da mensagem:", error);
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [applyMessageStatuses]);
 
   const applyTaskbarHighlight = useCallback(
     (highlighted: boolean) => {
@@ -2090,7 +2201,10 @@ function ChatWindow() {
 
     void appWindow
       .onFocusChanged(({ payload: isFocused }) => {
-        if (isFocused) clearTaskbarHighlight();
+        if (isFocused) {
+          clearTaskbarHighlight();
+          markVisibleMessagesAsRead();
+        }
       })
       .then((unlisten) => {
         unlistenFocusChanged = unlisten;
@@ -2100,7 +2214,23 @@ function ChatWindow() {
       unlistenFocusChanged?.();
       clearTaskbarHighlight();
     };
-  }, [appWindow, clearTaskbarHighlight]);
+  }, [appWindow, clearTaskbarHighlight, markVisibleMessagesAsRead]);
+
+  useEffect(() => {
+    if (appWindow) return;
+    const handleConversationVisibility = () => {
+      if (document.visibilityState === "visible" && document.hasFocus()) {
+        markVisibleMessagesAsRead();
+      }
+    };
+    window.addEventListener("focus", handleConversationVisibility);
+    document.addEventListener("visibilitychange", handleConversationVisibility);
+    handleConversationVisibility();
+    return () => {
+      window.removeEventListener("focus", handleConversationVisibility);
+      document.removeEventListener("visibilitychange", handleConversationVisibility);
+    };
+  }, [appWindow, markVisibleMessagesAsRead]);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -2111,8 +2241,20 @@ function ChatWindow() {
       .then((decrypted) => {
         if (cancelled) return;
         const available = decrypted.filter((item): item is ChatMessage => item !== null);
+        messagesRef.current = available;
         setMessages(available);
         saveChatMessages(id, available);
+        const receivedMessageIds = available
+          .filter((chatMessage) => chatMessage.author === "contact" && !chatMessage.readAt)
+          .map((chatMessage) => String(chatMessage.id));
+        void isConversationFocused().then((isFocused) => {
+          if (!cancelled) {
+            void acknowledgeReceivedMessages(
+              receivedMessageIds,
+              isFocused ? "read" : "delivered",
+            );
+          }
+        });
       })
       .catch((error) => {
         if (!cancelled) setSendError(error instanceof Error ? error.message : "Erro ao carregar mensagens");
@@ -2128,7 +2270,17 @@ function ChatWindow() {
         }
         void decryptApiMessage(incoming as ApiEncryptedMessage).then((decrypted) => {
           if (!decrypted || cancelled) return;
-          setMessages(appendChatMessage(id, decrypted));
+          const updatedMessages = appendChatMessage(id, decrypted);
+          messagesRef.current = updatedMessages;
+          setMessages(updatedMessages);
+          void isConversationFocused().then((isFocused) => {
+            if (!cancelled) {
+              void acknowledgeReceivedMessages(
+                [String(decrypted.id)],
+                isFocused ? "read" : "delivered",
+              );
+            }
+          });
           if (appWindow) {
             void Promise.all([appWindow.isFocused(), appWindow.isMinimized()])
               .then(([isFocused, isMinimized]) => {
@@ -2181,6 +2333,9 @@ function ChatWindow() {
       (typing) => {
         if (!isTauri()) handleRemoteTyping(typing);
       },
+      (status) => {
+        if (!isTauri()) applyMessageStatuses([status]);
+      },
     );
     realtimeSocketRef.current = socket;
     return () => {
@@ -2201,7 +2356,7 @@ function ChatWindow() {
       realtimeSocketRef.current = null;
       socket?.disconnect();
     };
-  }, [appWindow, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, publishTypingState, user]);
+  }, [acknowledgeReceivedMessages, appWindow, applyMessageStatuses, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, isConversationFocused, publishTypingState, user]);
 
   const saveEditorSelection = () => {
     const editor = messageInputRef.current;
@@ -2279,7 +2434,7 @@ function ChatWindow() {
       behavior: "smooth",
       top: messagesContainer.scrollHeight,
     });
-  }, [messages]);
+  }, [messages, isContactTyping]);
 
   useEffect(() => {
     return () => {
@@ -2614,9 +2769,7 @@ function ChatWindow() {
               <div
                 ref={messagesContainerRef}
                 aria-live="polite"
-                className={`h-full overflow-y-auto rounded-[10px] border border-[#9dbdcc] bg-gradient-to-b from-white/95 to-[#f3f9fc]/95 px-3 pt-3 text-sm shadow-[inset_0_2px_5px_rgba(47,91,113,0.1)] ${
-                  isContactTyping ? "pb-10" : "pb-3"
-                }`}
+                className="h-full overflow-y-auto rounded-[10px] border border-[#9dbdcc] bg-gradient-to-b from-white/95 to-[#f3f9fc]/95 px-3 pb-3 pt-3 text-sm shadow-[inset_0_2px_5px_rgba(47,91,113,0.1)]"
               >
               {messages.length === 0 ? (
                 <div className="flex h-full min-h-24 items-center justify-center">
@@ -2645,7 +2798,7 @@ function ChatWindow() {
                           ? `${user?.displayName ?? "Você"} diz:`
                           : `${contactName} diz:`}
                       </span>
-                      <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[9px] border border-[#c4dbe5] bg-white px-3 py-2 text-[#375567] shadow-[0_1px_3px_rgba(42,83,104,0.1)]">
+                      <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[9px] border border-[#c4dbe5] bg-white p-2 text-[#375567] shadow-[0_1px_3px_rgba(42,83,104,0.1)]">
                         {chatMessage.image ? (
                           <>
                             <button
@@ -2661,28 +2814,65 @@ function ChatWindow() {
                               />
                             </button>
                             {chatMessage.text && (
-                              <p className="mt-2">
+                              <p className="mt-2 leading-4">
                                 <MessageContent text={chatMessage.text} />
                               </p>
                             )}
                           </>
                         ) : (
-                          <MessageContent text={chatMessage.text} />
+                          <p className="leading-4">
+                            <MessageContent text={chatMessage.text} />
+                          </p>
                         )}
+                        <span className="mt-1 flex items-center justify-end gap-1 text-[10px] leading-none text-[#8198a4]">
+                          {chatMessage.sentAt && (
+                            <time dateTime={new Date(chatMessage.sentAt).toISOString()}>
+                              {formatMessageTime(chatMessage.sentAt)}
+                            </time>
+                          )}
+                          <span
+                            aria-label={chatMessage.readAt
+                              ? "Mensagem visualizada"
+                              : chatMessage.deliveredAt
+                                ? "Mensagem entregue"
+                                : "Mensagem enviada"}
+                            title={chatMessage.readAt
+                              ? "Visualizada"
+                              : chatMessage.deliveredAt
+                                ? "Entregue"
+                                : "Enviada"}
+                            className={`text-[15px] ${
+                              chatMessage.readAt ? "text-[#168ac0]" : "text-[#8198a4]"
+                            }`}
+                          >
+                            {chatMessage.deliveredAt ? (
+                              <MdDoneAll aria-hidden="true" />
+                            ) : (
+                              <MdDone aria-hidden="true" />
+                            )}
+                          </span>
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              </div>
               {isContactTyping && (
                 <div
                   aria-live="polite"
-                  className="pointer-events-none absolute inset-x-px bottom-px rounded-b-[9px] border-t border-[#c5dce6] bg-[#edf7fb]/95 px-3 py-1.5 text-xs font-semibold text-[#287da5] shadow-[0_-2px_5px_rgba(47,91,113,0.06)]"
+                  className="pointer-events-none mt-3 flex justify-start"
                 >
-                  {contactName} está digitando...
+                  <div className="msn-typing-bubble flex items-center gap-2 rounded-[9px] border border-[#bdd8e5] bg-gradient-to-b from-white to-[#eaf6fb] px-3 py-2 text-xs font-semibold text-[#287da5] shadow-[0_2px_7px_rgba(47,91,113,0.16)]">
+                    <span>{contactName} está digitando</span>
+                    <span aria-hidden="true" className="flex items-end gap-1 pb-0.5">
+                      <span className="msn-typing-dot" />
+                      <span className="msn-typing-dot" />
+                      <span className="msn-typing-dot" />
+                    </span>
+                  </div>
                 </div>
               )}
+              </div>
             </div>
           </div>
         </section>
@@ -2757,11 +2947,7 @@ function ChatWindow() {
                 onKeyUp={saveEditorSelection}
                 onMouseUp={saveEditorSelection}
                 onKeyDown={(event) => {
-                  if (
-                    event.key.length === 1 ||
-                    event.key === "Backspace" ||
-                    event.key === "Delete"
-                  ) {
+                  if (event.key.length === 1) {
                     updateOwnTyping(true);
                   }
 
@@ -2776,6 +2962,13 @@ function ChatWindow() {
                   }
 
                   const editor = event.currentTarget;
+                  window.requestAnimationFrame(() => {
+                    if (!editor.isConnected) return;
+                    const nextMessage = serializeEditorContent(editor);
+                    setMessage(nextMessage);
+                    updateOwnTyping(Boolean(nextMessage.trim()));
+                  });
+
                   const selection = window.getSelection();
                   if (!selection?.rangeCount || !selection.isCollapsed) return;
 
@@ -3106,6 +3299,10 @@ function ChatWindow() {
                   />
                 </button>
 
+                <span aria-hidden="true" className="ml-[10px] mr-1 text-[#8aa9b8]">
+                  |
+                </span>
+
                 <input
                   ref={imageInputRef}
                   type="file"
@@ -3124,12 +3321,8 @@ function ChatWindow() {
                   onClick={() => imageInputRef.current?.click()}
                   className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <MdOutlineImage aria-hidden="true" className="text-[#527b90]" size={21} />
+                  <FcAddImage aria-hidden="true" size={21} />
                 </button>
-
-                <span aria-hidden="true" className="ml-[10px] mr-1 text-[#8aa9b8]">
-                  |
-                </span>
 
                 <button
                   type="button"

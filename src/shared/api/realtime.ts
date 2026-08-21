@@ -1,6 +1,7 @@
 import { io, type Socket } from "socket.io-client";
 import { API_URL, apiRequest, getSession, refreshSession } from "./client";
 import type { NameEffect, ProfileFrame } from "../constants/ProfileStyle/page";
+import type { MessageStatusUpdate } from "./messages";
 
 export interface EncryptedMessageNotification {
   _id: string;
@@ -67,6 +68,7 @@ export function connectRealtime(
   initialStatus?: RealtimeUserStatus,
   onAccountChanged?: (account: RealtimeAccount) => void,
   onTypingChanged?: (typing: TypingNotification) => void,
+  onMessageStatusChanged?: (status: MessageStatusUpdate) => void,
 ): Socket | null {
   const session = getSession();
   if (!session) return null;
@@ -117,5 +119,6 @@ export function connectRealtime(
   if (onStatusChanged) socket.on("status:changed", onStatusChanged);
   if (onAccountChanged) socket.on("account:changed", onAccountChanged);
   if (onTypingChanged) socket.on("typing:changed", onTypingChanged);
+  if (onMessageStatusChanged) socket.on("message:status", onMessageStatusChanged);
   return socket;
 }

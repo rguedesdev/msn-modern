@@ -77,6 +77,39 @@
   color: #527b90;
 }
 
+.msn-typing-dot {
+  display: block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #3c96bc;
+  animation: msnTypingDot 1.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+.msn-typing-dot:nth-child(1) {
+  animation-delay: -0.56s;
+}
+
+.msn-typing-dot:nth-child(2) {
+  animation-delay: -0.28s;
+}
+
+@keyframes msnTypingDot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(2px);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
 .msn-floating-input-label::before {
   background: var(--msn-input-label-background, #fff);
 }
@@ -354,6 +387,17 @@ html[data-msn-theme="dark"] .msn-local-player-icon {
 
 html[data-msn-theme="dark"] .msn-profile-message {
   color: #8fb8c8;
+}
+
+html[data-msn-theme="dark"] .msn-typing-bubble {
+  border-color: #326b80 !important;
+  background-image: linear-gradient(to bottom, #173b4b, #102b38) !important;
+  color: #8fd2ef !important;
+  box-shadow: 0 2px 7px rgb(0 0 0 / 34%), inset 0 1px rgb(255 255 255 / 4%) !important;
+}
+
+html[data-msn-theme="dark"] .msn-typing-dot {
+  background-color: #63c7e8;
 }
 
 html[data-msn-theme="dark"] .msn-settings-trigger {

@@ -25,6 +25,10 @@ const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 const typingSchema = z.object({ isTyping: z.boolean() });
+const messageStatusSchema = z.object({
+  messageIds: z.array(objectIdSchema).min(1).max(100),
+  status: z.enum(["delivered", "read"]),
+});
 
 function isParticipant(participants: Types.ObjectId[], userId: string): boolean {
   return participants.some((participant) => participant.toString() === userId);
@@ -40,7 +44,69 @@ function messageForUser(message: Message & { _id: Types.ObjectId }, userId: stri
   };
 }
 
+function messageStatusFor(message: Message & { _id: Types.ObjectId }) {
+  return {
+    conversationId: message.conversationId.toString(),
+    messageId: message._id.toString(),
+    deliveredAt: message.deliveredAt?.toISOString() ?? null,
+    readAt: message.readAt?.toISOString() ?? null,
+  };
+}
+
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/conversations/:conversationId/messages/status",
+    { preHandler: app.authenticate },
+    async (request) => {
+      const { conversationId } = parseInput(routeSchema, request.params);
+      const input = parseInput(messageStatusSchema, request.body);
+      const conversation = await ConversationModel.findById(conversationId)
+        .select("participants")
+        .lean();
+      if (!conversation || !isParticipant(conversation.participants, request.user.sub)) {
+        throw new HttpError(404, "Conversa não encontrada");
+      }
+
+      const messages = await MessageModel.find({
+        _id: { $in: input.messageIds },
+        conversationId,
+        senderUserId: { $ne: request.user.sub },
+        "envelopes.recipientUserId": request.user.sub,
+      });
+      if (messages.length !== new Set(input.messageIds).size) {
+        throw new HttpError(404, "Uma ou mais mensagens não foram encontradas");
+      }
+
+      const acknowledgedAt = new Date();
+      const changedMessages: typeof messages = [];
+      for (const message of messages) {
+        let changed = false;
+        if (!message.deliveredAt) {
+          message.deliveredAt = acknowledgedAt;
+          changed = true;
+        }
+        if (input.status === "read" && !message.readAt) {
+          message.readAt = acknowledgedAt;
+          changed = true;
+        }
+        if (changed) {
+          await message.save();
+          changedMessages.push(message);
+        }
+      }
+
+      const statuses = messages.map(messageStatusFor);
+      for (const message of changedMessages) {
+        app.io.to(`user:${message.senderUserId}`).emit(
+          "message:status",
+          messageStatusFor(message),
+        );
+      }
+
+      return { statuses };
+    },
+  );
+
   app.post(
     "/conversations/:conversationId/typing",
     { preHandler: app.authenticate },

@@ -37,6 +37,7 @@ import {
 import {
   TYPING_CHANGED_EVENT,
 } from "../../shared/constants/TypingEvents";
+import { MESSAGE_STATUS_CHANGED_EVENT } from "../../shared/constants/MessageEvents";
 import {
   CONTACT_STATUS_FRAMES,
   toContactStatus,
@@ -56,6 +57,7 @@ import {
   listConversations,
 } from "../../shared/api/conversations";
 import { connectRealtime } from "../../shared/api/realtime";
+import { markMessagesStatus } from "../../shared/api/messages";
 import type { Socket } from "socket.io-client";
 import { decryptEnvelope, registerCurrentDevice } from "../../shared/api/e2ee";
 import {
@@ -1006,6 +1008,13 @@ function HomePage() {
     const socket = connectRealtime((encryptedMessage) => {
       const contact = contatosRef.current.find((item) => item.id === encryptedMessage.conversationId);
       if (!contact || encryptedMessage.senderUserId === user.id) return;
+      void markMessagesStatus(
+        encryptedMessage.conversationId,
+        [encryptedMessage._id],
+        "delivered",
+      ).catch((error) => {
+        console.error("Não foi possível confirmar a entrega da mensagem:", error);
+      });
       playMessageNotificationSound();
 
       void (async () => {
@@ -1180,6 +1189,15 @@ function HomePage() {
         typing,
       ).catch((error) => {
         console.error("Erro ao encaminhar indicador de digitação:", error);
+      });
+    }, (status) => {
+      if (!isTauri()) return;
+      void emitTo(
+        `chat-${status.conversationId}`,
+        MESSAGE_STATUS_CHANGED_EVENT,
+        status,
+      ).catch((error) => {
+        console.error("Erro ao encaminhar status da mensagem:", error);
       });
     });
     realtimeSocketRef.current = socket;

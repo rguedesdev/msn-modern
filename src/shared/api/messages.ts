@@ -9,6 +9,15 @@ export interface ApiEncryptedMessage {
   protocol: "webcrypto-p256-v1";
   envelopes: EncryptedEnvelope[];
   sentAt: string;
+  deliveredAt?: string | null;
+  readAt?: string | null;
+}
+
+export interface MessageStatusUpdate {
+  conversationId: string;
+  messageId: string;
+  deliveredAt: string | null;
+  readAt: string | null;
 }
 
 export async function sendEncryptedMessage(
@@ -36,4 +45,20 @@ export async function listEncryptedMessages(conversationId: string): Promise<Api
     `/conversations/${conversationId}/messages?limit=100`,
   );
   return response.messages.reverse();
+}
+
+export async function markMessagesStatus(
+  conversationId: string,
+  messageIds: string[],
+  status: "delivered" | "read",
+): Promise<MessageStatusUpdate[]> {
+  if (messageIds.length === 0) return [];
+  const response = await apiRequest<{ statuses: MessageStatusUpdate[] }>(
+    `/conversations/${conversationId}/messages/status`,
+    {
+      method: "POST",
+      body: JSON.stringify({ messageIds, status }),
+    },
+  );
+  return response.statuses;
 }

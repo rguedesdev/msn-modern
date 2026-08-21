@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { connectDatabase, disconnectDatabase } from "../src/db.js";
+import { MessageModel } from "../src/models/message.js";
 
 const mongodbUri = process.env.MONGODB_URI;
 
@@ -101,6 +102,64 @@ describe("eventos em tempo real", () => {
       conversationId,
       userId: bob.user.id,
       isTyping: true,
+    });
+
+    const message = await MessageModel.create({
+      conversationId,
+      senderUserId: alice.user.id,
+      senderDeviceId: "11111111-1111-4111-8111-111111111111",
+      clientMessageId: "55555555-5555-4555-8555-555555555555",
+      protocol: "webcrypto-p256-v1",
+      envelopes: [{
+        recipientUserId: bob.user.id,
+        recipientDeviceId: "22222222-2222-4222-8222-222222222222",
+        type: "prekey",
+        payload: "Y2lwaGVydGV4dA==",
+      }],
+    });
+
+    const nextStatusEvent = (socket: Socket) =>
+      new Promise<{
+        conversationId: string;
+        messageId: string;
+        deliveredAt: string | null;
+        readAt: string | null;
+      }>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Status da mensagem não recebido")), 2_000);
+        socket.once("message:status", (status) => {
+          clearTimeout(timeout);
+          resolve(status);
+        });
+      });
+
+    const deliveredByBob = nextStatusEvent(aliceSocket);
+    const deliveryResponse = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+      payload: { messageIds: [message._id.toString()], status: "delivered" },
+    });
+    expect(deliveryResponse.statusCode).toBe(200);
+    await expect(deliveredByBob).resolves.toMatchObject({
+      conversationId,
+      messageId: message._id.toString(),
+      deliveredAt: expect.any(String),
+      readAt: null,
+    });
+
+    const readByBob = nextStatusEvent(aliceSocket);
+    const readResponse = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+      payload: { messageIds: [message._id.toString()], status: "read" },
+    });
+    expect(readResponse.statusCode).toBe(200);
+    await expect(readByBob).resolves.toMatchObject({
+      conversationId,
+      messageId: message._id.toString(),
+      deliveredAt: expect.any(String),
+      readAt: expect.any(String),
     });
   });
 });

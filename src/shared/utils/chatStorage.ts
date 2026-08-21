@@ -5,7 +5,10 @@ export interface ChatMessage {
   author: "me" | "contact";
   text: string;
   image?: ChatImagePayload;
+  sentAt?: number;
   receivedAt?: number;
+  deliveredAt?: number;
+  readAt?: number;
 }
 
 const CHAT_STORAGE_PREFIX = "msn-modern:chat-messages:";

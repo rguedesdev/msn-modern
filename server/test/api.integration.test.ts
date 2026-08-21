@@ -335,6 +335,54 @@ describe("API com MongoDB", () => {
     });
     expect(webCryptoMessage.statusCode).toBe(201);
     expect(JSON.stringify(webCryptoMessage.json())).not.toContain("plaintext");
+    const webCryptoMessageId = webCryptoMessage.json().message._id as string;
+
+    const deliveredMessage = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: bobAuth,
+      payload: {
+        messageIds: [webCryptoMessageId],
+        status: "delivered",
+      },
+    });
+    expect(deliveredMessage.statusCode).toBe(200);
+    expect(deliveredMessage.json().statuses[0]).toMatchObject({
+      conversationId,
+      messageId: webCryptoMessageId,
+      readAt: null,
+    });
+    expect(deliveredMessage.json().statuses[0].deliveredAt).toEqual(expect.any(String));
+
+    const readMessage = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: bobAuth,
+      payload: {
+        messageIds: [webCryptoMessageId],
+        status: "read",
+      },
+    });
+    expect(readMessage.statusCode).toBe(200);
+    expect(readMessage.json().statuses[0]).toMatchObject({
+      conversationId,
+      messageId: webCryptoMessageId,
+    });
+    expect(readMessage.json().statuses[0].readAt).toEqual(expect.any(String));
+
+    const messageHistoryWithStatus = await app.inject({
+      method: "GET",
+      url: `/conversations/${conversationId}/messages?limit=100`,
+      headers: aliceAuth,
+    });
+    const persistedStatusMessage = messageHistoryWithStatus.json().messages.find(
+      (message: { _id: string }) => message._id === webCryptoMessageId,
+    );
+    expect(persistedStatusMessage).toMatchObject({
+      _id: webCryptoMessageId,
+    });
+    expect(persistedStatusMessage.deliveredAt).toEqual(expect.any(String));
+    expect(persistedStatusMessage.readAt).toEqual(expect.any(String));
 
     const refreshed = await app.inject({
       method: "POST",

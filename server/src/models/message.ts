@@ -17,6 +17,8 @@ export interface Message {
   protocol: "signal-v1" | "webcrypto-p256-v1";
   envelopes: EncryptedEnvelope[];
   sentAt: Date;
+  deliveredAt?: Date;
+  readAt?: Date;
   createdAt: Date;
 }
 
@@ -39,6 +41,8 @@ const messageSchema = new Schema<Message>(
     protocol: { type: String, enum: ["signal-v1", "webcrypto-p256-v1"], required: true },
     envelopes: { type: [envelopeSchema], required: true },
     sentAt: { type: Date, default: Date.now, required: true },
+    deliveredAt: { type: Date },
+    readAt: { type: Date },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
