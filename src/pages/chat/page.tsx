@@ -33,11 +33,23 @@ import {
   saveChatMessages,
   type ChatMessage,
 } from "../../shared/utils/chatStorage";
+import {
+  decodeChatPayload,
+  encodeImagePayload,
+  type ChatImagePayload,
+} from "../../shared/utils/chatPayload";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { resolveApiAssetUrl } from "../../shared/api/client";
 import { decryptEnvelope, encryptForDevice, listPublicKeys, registerCurrentDevice } from "../../shared/api/e2ee";
 import { listEncryptedMessages, sendEncryptedMessage, type ApiEncryptedMessage } from "../../shared/api/messages";
-import { connectRealtime } from "../../shared/api/realtime";
+import {
+  connectRealtime,
+  setConversationTyping,
+  type TypingNotification,
+} from "../../shared/api/realtime";
+import {
+  TYPING_CHANGED_EVENT,
+} from "../../shared/constants/TypingEvents";
 import { chatMessageSchema } from "../../shared/validation/forms";
 
 // Icons
@@ -46,6 +58,7 @@ import {
   MdCropSquare,
   MdKeyboardArrowDown,
   MdMinimize,
+  MdOutlineImage,
   MdOutlineVideoChat,
   MdVoiceChat,
 } from "react-icons/md";
@@ -1334,6 +1347,11 @@ type EmoticonPickerTab = "standard" | "exclusive";
 const EDITOR_CARET_ANCHOR = "\u200B";
 const TASKBAR_BLINK_INTERVAL_MS = 600;
 const TASKBAR_BLINK_DURATION_MS = TASKBAR_BLINK_INTERVAL_MS * 7;
+const TYPING_HEARTBEAT_MS = 3_000;
+const REMOTE_TYPING_TIMEOUT_MS = 8_000;
+const MAX_CHAT_IMAGE_INPUT_SIZE = 5 * 1024 * 1024;
+const MAX_CHAT_IMAGE_OUTPUT_SIZE = 160 * 1024;
+const MAX_CHAT_IMAGE_DIMENSION = 1280;
 
 const EMOTICON_PATTERN = new RegExp(
   `(${EMOTICONS.map((emoticon) =>
@@ -1359,6 +1377,72 @@ function MessageContent({ text }: { text: string }) {
       part
     );
   });
+}
+
+async function prepareChatImage(file: File): Promise<ChatImagePayload> {
+  if (!/^image\/(?:jpeg|png|webp)$/.test(file.type)) {
+    throw new Error("Escolha uma imagem JPG, PNG ou WebP");
+  }
+  if (file.size > MAX_CHAT_IMAGE_INPUT_SIZE) {
+    throw new Error("A imagem deve ter no máximo 5 MB");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Não foi possível abrir a imagem"));
+      image.src = objectUrl;
+    });
+
+    const scale = Math.min(
+      1,
+      MAX_CHAT_IMAGE_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight),
+    );
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível processar a imagem");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let result: Blob | null = null;
+    for (let resizeAttempt = 0; resizeAttempt < 4; resizeAttempt += 1) {
+      let quality = 0.82;
+      while (quality >= 0.4) {
+        result = await new Promise<Blob | null>((resolve) => {
+          canvas.toBlob(resolve, "image/webp", quality);
+        });
+        if (result && result.size <= MAX_CHAT_IMAGE_OUTPUT_SIZE) break;
+        quality -= 0.08;
+      }
+      if (result && result.size <= MAX_CHAT_IMAGE_OUTPUT_SIZE) break;
+
+      const resized = document.createElement("canvas");
+      resized.width = Math.max(1, Math.round(canvas.width * 0.8));
+      resized.height = Math.max(1, Math.round(canvas.height * 0.8));
+      const resizedContext = resized.getContext("2d");
+      if (!resizedContext) break;
+      resizedContext.drawImage(canvas, 0, 0, resized.width, resized.height);
+      canvas.width = resized.width;
+      canvas.height = resized.height;
+      context.drawImage(resized, 0, 0);
+    }
+    if (!result || result.size > MAX_CHAT_IMAGE_OUTPUT_SIZE) {
+      throw new Error("Não foi possível reduzir a imagem para envio");
+    }
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("Não foi possível ler a imagem"));
+      reader.readAsDataURL(result);
+    });
+    return { dataUrl, name: file.name.slice(0, 120) || "imagem.webp" };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function createEditorEmoticon(code: EmoticonCode) {
@@ -1492,10 +1576,15 @@ function ChatWindow() {
   const [message, setMessage] = useState("");
   const [sendError, setSendError] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isPreparingImage, setIsPreparingImage] = useState(false);
+  const [pendingImage, setPendingImage] = useState<ChatImagePayload | null>(null);
+  const [isContactTyping, setIsContactTyping] = useState(false);
+  const [maximizedImage, setMaximizedImage] = useState<ChatImagePayload | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
     id ? getChatMessages(id) : [],
   );
   const messageInputRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const emoticonPickerRef = useRef<HTMLDivElement>(null);
   const editorSelectionRef = useRef<Range | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -1509,6 +1598,11 @@ function ChatWindow() {
   const taskbarBlinkIntervalRef = useRef<number | undefined>(undefined);
   const taskbarBlinkEndTimerRef = useRef<number | undefined>(undefined);
   const realtimeSocketRef = useRef<Socket | null>(null);
+  const typingHeartbeatIntervalRef = useRef<number | undefined>(undefined);
+  const remoteTypingTimerRef = useRef<number | undefined>(undefined);
+  const isTypingSentRef = useRef(false);
+  const typingGenerationRef = useRef(0);
+  const typingRequestQueueRef = useRef<Promise<void>>(Promise.resolve());
   const triggerNudgeEffectRef = useRef<() => void>(() => {});
   const initialNudgeHandledRef = useRef(false);
   const appWindow = useMemo(() => (isTauri() ? getCurrentWebviewWindow() : null), []);
@@ -1536,6 +1630,15 @@ function ChatWindow() {
       document.removeEventListener("pointerdown", handleOutsidePointerDown);
     };
   }, [isEmoticonPickerOpen]);
+
+  useEffect(() => {
+    if (!maximizedImage) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMaximizedImage(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [maximizedImage]);
 
   useEffect(() => {
     if (!appWindow) return;
@@ -1716,55 +1819,186 @@ function ChatWindow() {
     setIsVideoCallOpen((isOpen) => !isOpen);
   };
 
+  const handleRemoteTyping = useCallback((typing: TypingNotification) => {
+    if (typing.conversationId !== id || typing.userId === user?.id) return;
+    if (remoteTypingTimerRef.current !== undefined) {
+      window.clearTimeout(remoteTypingTimerRef.current);
+      remoteTypingTimerRef.current = undefined;
+    }
+    setIsContactTyping(typing.isTyping);
+    if (typing.isTyping) {
+      remoteTypingTimerRef.current = window.setTimeout(() => {
+        setIsContactTyping(false);
+        remoteTypingTimerRef.current = undefined;
+      }, REMOTE_TYPING_TIMEOUT_MS);
+    }
+  }, [id, user?.id]);
+
+  const publishTypingState = useCallback((isTyping: boolean) => {
+    if (!id) return;
+    typingRequestQueueRef.current = typingRequestQueueRef.current
+      .catch(() => undefined)
+      .then(() => setConversationTyping(id, isTyping))
+      .catch((error) => {
+        console.error("Erro ao enviar indicador de digitação:", error);
+      });
+  }, [id]);
+
+  const stopOwnTyping = useCallback(() => {
+    typingGenerationRef.current += 1;
+    if (typingHeartbeatIntervalRef.current !== undefined) {
+      window.clearInterval(typingHeartbeatIntervalRef.current);
+      typingHeartbeatIntervalRef.current = undefined;
+    }
+    if (isTypingSentRef.current) publishTypingState(false);
+    isTypingSentRef.current = false;
+  }, [publishTypingState]);
+
+  const updateOwnTyping = useCallback((hasContent: boolean) => {
+    if (!hasContent) {
+      stopOwnTyping();
+      return;
+    }
+
+    if (!id) return;
+    if (!isTypingSentRef.current) {
+      typingGenerationRef.current += 1;
+      const generation = typingGenerationRef.current;
+      publishTypingState(true);
+      isTypingSentRef.current = true;
+      typingHeartbeatIntervalRef.current = window.setInterval(
+        () => {
+          if (
+            isTypingSentRef.current &&
+            typingGenerationRef.current === generation
+          ) {
+            publishTypingState(true);
+          }
+        },
+        TYPING_HEARTBEAT_MS,
+      );
+    }
+  }, [id, publishTypingState, stopOwnTyping]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<TypingNotification>(TYPING_CHANGED_EVENT, ({ payload }) => {
+      handleRemoteTyping(payload);
+    }).then((stopListening) => {
+      if (disposed) stopListening();
+      else unlisten = stopListening;
+    }).catch((error) => {
+      console.error("Erro ao receber indicador de digitação:", error);
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [handleRemoteTyping]);
+
+  useEffect(() => {
+    const editor = messageInputRef.current;
+    if (!editor) return;
+
+    const synchronizeTypingWithEditor = () => {
+      const currentContent = serializeEditorContent(editor);
+      updateOwnTyping(Boolean(currentContent.trim()));
+    };
+    const observer = new MutationObserver(synchronizeTypingWithEditor);
+    observer.observe(editor, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    synchronizeTypingWithEditor();
+    return () => observer.disconnect();
+  }, [updateOwnTyping]);
+
+  const sendEncryptedPayload = async (payload: string) => {
+    if (!user) {
+      throw new Error("Sua sessão não está disponível nesta janela. Feche a conversa e abra novamente.");
+    }
+    if (!id || !contactUserId) {
+      throw new Error("Não foi possível identificar esta conversa.");
+    }
+    const identity = await registerCurrentDevice(user.id);
+    const [recipientKeys, ownKeys] = await Promise.all([
+      listPublicKeys(contactUserId),
+      listPublicKeys(user.id),
+    ]);
+    if (recipientKeys.length === 0) {
+      throw new Error(`${contactName} precisa abrir a versão atualizada do aplicativo uma vez para ativar a criptografia.`);
+    }
+    const targets = [
+      ...recipientKeys.map((key) => ({ userId: contactUserId, key })),
+      ...ownKeys.map((key) => ({ userId: user.id, key })),
+    ];
+    const envelopes = await Promise.all(
+      targets.map(({ userId: recipientUserId, key }) =>
+        encryptForDevice(payload, id, recipientUserId, key),
+      ),
+    );
+    return sendEncryptedMessage(id, identity.deviceId, envelopes);
+  };
+
   const handleSendMessage = async () => {
-    const validation = chatMessageSchema.safeParse(message);
-    if (!validation.success) {
+    const hasText = Boolean(message.trim());
+    if (!hasText && !pendingImage) return;
+    const validation = hasText ? chatMessageSchema.safeParse(message) : null;
+    if (validation && !validation.success) {
       setSendError(validation.error.issues[0]?.message ?? "Mensagem inválida");
       return;
     }
-    if (!user) {
-      setSendError("Sua sessão não está disponível nesta janela. Feche a conversa e abra novamente.");
-      return;
-    }
-    if (!id || !contactUserId) {
-      setSendError("Não foi possível identificar esta conversa.");
-      return;
-    }
     if (isSending) return;
-    const validatedMessage = validation.data;
+    const validatedMessage = validation?.success ? validation.data : "";
     setIsSending(true);
     setSendError("");
     try {
-      const identity = await registerCurrentDevice(user.id);
-      const [recipientKeys, ownKeys] = await Promise.all([
-        listPublicKeys(contactUserId),
-        listPublicKeys(user.id),
-      ]);
-      if (recipientKeys.length === 0) {
-        throw new Error(`${contactName} precisa abrir a versão atualizada do aplicativo uma vez para ativar a criptografia.`);
-      }
-      const targets = [
-        ...recipientKeys.map((key) => ({ userId: contactUserId, key })),
-        ...ownKeys.map((key) => ({ userId: user.id, key })),
-      ];
-      const envelopes = await Promise.all(
-        targets.map(({ userId: recipientUserId, key }) =>
-          encryptForDevice(validatedMessage, id, recipientUserId, key),
-        ),
+      const image = pendingImage
+        ? { ...pendingImage, caption: validatedMessage || undefined }
+        : null;
+      const sent = await sendEncryptedPayload(
+        image ? encodeImagePayload(image) : validatedMessage,
       );
-      const sent = await sendEncryptedMessage(id, identity.deviceId, envelopes);
-      const chatMessage: ChatMessage = { id: sent._id, author: "me", text: validatedMessage };
+      const chatMessage: ChatMessage = {
+        id: sent._id,
+        author: "me",
+        text: validatedMessage,
+        image: image ?? undefined,
+      };
       setMessages((current) => {
         const updated = [...current, chatMessage];
-        saveChatMessages(id, updated);
+        saveChatMessages(sent.conversationId, updated);
         return updated;
       });
+      stopOwnTyping();
       setMessage("");
+      setPendingImage(null);
       if (messageInputRef.current) messageInputRef.current.innerHTML = "";
     } catch (error) {
       setSendError(error instanceof Error ? error.message : "Não foi possível enviar a mensagem");
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleSelectImage = async (file: File) => {
+    if (isSending || isPreparingImage) return;
+    setIsPreparingImage(true);
+    setSendError("");
+    try {
+      const image = await prepareChatImage(file);
+      setPendingImage(image);
+      window.requestAnimationFrame(() => messageInputRef.current?.focus());
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "Não foi possível preparar a imagem");
+    } finally {
+      setIsPreparingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
     }
   };
 
@@ -1774,10 +2008,16 @@ function ChatWindow() {
     const envelope = apiMessage.envelopes.find((item) => item.recipientDeviceId === identity.deviceId);
     if (!envelope) return null;
     try {
+      const decryptedPayload = decodeChatPayload(
+        await decryptEnvelope(user.id, id, envelope.payload),
+      );
       return {
         id: apiMessage._id,
         author: apiMessage.senderUserId === user.id ? "me" : "contact",
-        text: await decryptEnvelope(user.id, id, envelope.payload),
+        text: decryptedPayload.type === "text"
+          ? decryptedPayload.text
+          : decryptedPayload.image.caption ?? "",
+        image: decryptedPayload.type === "image" ? decryptedPayload.image : undefined,
         receivedAt: apiMessage.senderUserId === user.id ? undefined : new Date(apiMessage.sentAt).getTime(),
       };
     } catch {
@@ -1881,6 +2121,11 @@ function ChatWindow() {
     const socket = connectRealtime(
       (incoming) => {
         if (incoming.conversationId !== id || incoming.senderUserId === user.id) return;
+        setIsContactTyping(false);
+        if (remoteTypingTimerRef.current !== undefined) {
+          window.clearTimeout(remoteTypingTimerRef.current);
+          remoteTypingTimerRef.current = undefined;
+        }
         void decryptApiMessage(incoming as ApiEncryptedMessage).then((decrypted) => {
           if (!decrypted || cancelled) return;
           setMessages(appendChatMessage(id, decrypted));
@@ -1933,14 +2178,30 @@ function ChatWindow() {
         setContactProfileFrame(account.profileFrame);
         setContactNameEffect(account.nameEffect);
       },
+      (typing) => {
+        if (!isTauri()) handleRemoteTyping(typing);
+      },
     );
     realtimeSocketRef.current = socket;
     return () => {
       cancelled = true;
+      if (isTypingSentRef.current) {
+        publishTypingState(false);
+      }
+      if (typingHeartbeatIntervalRef.current !== undefined) {
+        window.clearInterval(typingHeartbeatIntervalRef.current);
+        typingHeartbeatIntervalRef.current = undefined;
+      }
+      if (remoteTypingTimerRef.current !== undefined) {
+        window.clearTimeout(remoteTypingTimerRef.current);
+        remoteTypingTimerRef.current = undefined;
+      }
+      isTypingSentRef.current = false;
+      setIsContactTyping(false);
       realtimeSocketRef.current = null;
       socket?.disconnect();
     };
-  }, [appWindow, blinkTaskbarInAmber, contactUserId, decryptApiMessage, id, user]);
+  }, [appWindow, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, publishTypingState, user]);
 
   const saveEditorSelection = () => {
     const editor = messageInputRef.current;
@@ -1978,7 +2239,9 @@ function ChatWindow() {
     const caretRange = placeCaretAfterNode(emoticon);
     editorSelectionRef.current = caretRange?.cloneRange() ?? null;
 
-    setMessage(serializeEditorContent(editor));
+    const nextMessage = serializeEditorContent(editor);
+    setMessage(nextMessage);
+    updateOwnTyping(Boolean(nextMessage.trim()));
     setIsEmoticonPickerOpen(false);
 
     window.requestAnimationFrame(() => {
@@ -2347,11 +2610,14 @@ function ChatWindow() {
               </div>
             </header>
 
-            <div
-              ref={messagesContainerRef}
-              aria-live="polite"
-              className="min-h-0 flex-1 overflow-y-auto rounded-[10px] border border-[#9dbdcc] bg-gradient-to-b from-white/95 to-[#f3f9fc]/95 p-3 text-sm shadow-[inset_0_2px_5px_rgba(47,91,113,0.1)]"
-            >
+            <div className="relative min-h-0 flex-1">
+              <div
+                ref={messagesContainerRef}
+                aria-live="polite"
+                className={`h-full overflow-y-auto rounded-[10px] border border-[#9dbdcc] bg-gradient-to-b from-white/95 to-[#f3f9fc]/95 px-3 pt-3 text-sm shadow-[inset_0_2px_5px_rgba(47,91,113,0.1)] ${
+                  isContactTyping ? "pb-10" : "pb-3"
+                }`}
+              >
               {messages.length === 0 ? (
                 <div className="flex h-full min-h-24 items-center justify-center">
                   <p className="rounded-full border border-[#d4e5ed] bg-white/70 px-4 py-1.5 text-center text-xs italic text-[#7893a0]">
@@ -2379,11 +2645,42 @@ function ChatWindow() {
                           ? `${user?.displayName ?? "Você"} diz:`
                           : `${contactName} diz:`}
                       </span>
-                      <p className="max-w-[78%] whitespace-pre-wrap break-words rounded-[9px] border border-[#c4dbe5] bg-white px-3 py-2 text-[#375567] shadow-[0_1px_3px_rgba(42,83,104,0.1)]">
-                        <MessageContent text={chatMessage.text} />
-                      </p>
+                      <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[9px] border border-[#c4dbe5] bg-white px-3 py-2 text-[#375567] shadow-[0_1px_3px_rgba(42,83,104,0.1)]">
+                        {chatMessage.image ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setMaximizedImage(chatMessage.image ?? null)}
+                              title="Ampliar imagem"
+                              className="block cursor-zoom-in rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65afd0]"
+                            >
+                              <img
+                                src={chatMessage.image.dataUrl}
+                                alt={chatMessage.image.name || "Imagem enviada"}
+                                className="max-h-36 max-w-[220px] rounded-md object-contain"
+                              />
+                            </button>
+                            {chatMessage.text && (
+                              <p className="mt-2">
+                                <MessageContent text={chatMessage.text} />
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <MessageContent text={chatMessage.text} />
+                        )}
+                      </div>
                     </div>
                   ))}
+                </div>
+              )}
+              </div>
+              {isContactTyping && (
+                <div
+                  aria-live="polite"
+                  className="pointer-events-none absolute inset-x-px bottom-px rounded-b-[9px] border-t border-[#c5dce6] bg-[#edf7fb]/95 px-3 py-1.5 text-xs font-semibold text-[#287da5] shadow-[0_-2px_5px_rgba(47,91,113,0.06)]"
+                >
+                  {contactName} está digitando...
                 </div>
               )}
             </div>
@@ -2413,10 +2710,28 @@ function ChatWindow() {
             className="flex min-w-0 flex-1 flex-col rounded-[10px] border border-[#7faec4] bg-white/95 shadow-[0_2px_7px_rgba(40,85,108,0.16)] transition focus-within:border-[#4d9fc4] focus-within:ring-2 focus-within:ring-[#70b9d8]/25"
           >
             <div className="relative min-h-0 flex-1 rounded-t-[9px] bg-gradient-to-b from-white to-[#fbfdfe]">
-              {!message && (
+              {!message && !pendingImage && (
                 <span className="pointer-events-none absolute left-3 top-3 text-sm font-normal text-[#829aa6]">
                   Digite uma mensagem
                 </span>
+              )}
+              {pendingImage && (
+                <div className="absolute left-2 top-2 z-10 h-14 w-16 rounded-md border border-[#a9cbd9] bg-[#edf7fb] p-1 shadow-sm">
+                  <img
+                    src={pendingImage.dataUrl}
+                    alt={pendingImage.name || "Imagem selecionada"}
+                    className="h-full w-full rounded object-cover"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Remover imagem selecionada"
+                    title="Remover imagem"
+                    onClick={() => setPendingImage(null)}
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#8eabb8] bg-white text-[#52758a] shadow-sm transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <MdClose aria-hidden="true" size={13} />
+                  </button>
+                </div>
               )}
               <div
                 ref={messageInputRef}
@@ -2429,6 +2744,7 @@ function ChatWindow() {
                   const editor = event.currentTarget;
                   const nextMessage = serializeEditorContent(editor);
                   setMessage(nextMessage);
+                  updateOwnTyping(Boolean(nextMessage.trim()));
 
                   if (hasTypedEmoticon(editor)) {
                     renderEditorContent(editor, nextMessage);
@@ -2441,6 +2757,14 @@ function ChatWindow() {
                 onKeyUp={saveEditorSelection}
                 onMouseUp={saveEditorSelection}
                 onKeyDown={(event) => {
+                  if (
+                    event.key.length === 1 ||
+                    event.key === "Backspace" ||
+                    event.key === "Delete"
+                  ) {
+                    updateOwnTyping(true);
+                  }
+
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     void handleSendMessage();
@@ -2509,9 +2833,13 @@ function ChatWindow() {
                   selection.removeAllRanges();
                   selection.addRange(range);
                   editorSelectionRef.current = range.cloneRange();
-                  setMessage(serializeEditorContent(editor));
+                  const nextMessage = serializeEditorContent(editor);
+                  setMessage(nextMessage);
+                  updateOwnTyping(Boolean(nextMessage.trim()));
                 }}
-                className="h-full overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm text-[#304f60] outline-none"
+                className={`h-full overflow-y-auto whitespace-pre-wrap break-words p-3 text-sm text-[#304f60] outline-none ${
+                  pendingImage ? "pl-20" : ""
+                }`}
               />
             </div>
 
@@ -2778,6 +3106,27 @@ function ChatWindow() {
                   />
                 </button>
 
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    if (file) void handleSelectImage(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-label="Selecionar imagem"
+                  title="Selecionar imagem"
+                  disabled={isSending || isPreparingImage}
+                  onClick={() => imageInputRef.current?.click()}
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <MdOutlineImage aria-hidden="true" className="text-[#527b90]" size={21} />
+                </button>
+
                 <span aria-hidden="true" className="ml-[10px] mr-1 text-[#8aa9b8]">
                   |
                 </span>
@@ -2825,7 +3174,7 @@ function ChatWindow() {
               <button
                 type="button"
                 onClick={() => void handleSendMessage()}
-                disabled={!message.trim() || isSending}
+                disabled={(!message.trim() && !pendingImage) || isSending || isPreparingImage}
                 title="Enviar mensagem criptografada"
                 className="rounded-md border border-[#3989b1] bg-gradient-to-b from-[#78c5e5] to-[#3295c2] px-4 py-1.5 text-xs font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_1px_2px_rgba(31,82,108,0.24)] transition hover:from-[#8bd1ec] hover:to-[#3aa2cf] disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -2836,13 +3185,40 @@ function ChatWindow() {
         </section>
 
         <footer className="flex min-h-6 shrink-0 items-center px-3 pb-1 text-[10px] text-[#67899a]">
-          <p className={sendError ? "text-red-600" : undefined}>
+          <p className={`min-w-0 truncate ${sendError ? "text-red-600" : ""}`}>
             {sendError || (lastReceivedAt
               ? `Última mensagem recebida em ${lastReceivedAt}`
               : "Nenhuma mensagem recebida nesta conversa")}
           </p>
         </footer>
       </div>
+
+      {maximizedImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Imagem ampliada"
+          className="fixed inset-2.5 z-[100] flex items-center justify-center rounded-[12px] bg-[#102633]/90 p-8"
+          onClick={() => setMaximizedImage(null)}
+        >
+          <button
+            type="button"
+            aria-label="Fechar imagem ampliada"
+            title="Fechar"
+            onClick={() => setMaximizedImage(null)}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-md border border-white/40 bg-black/30 text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          >
+            <MdClose aria-hidden="true" size={24} />
+          </button>
+          <img
+            src={maximizedImage.dataUrl}
+            alt={maximizedImage.name || "Imagem enviada"}
+            title={maximizedImage.name || "Imagem enviada"}
+            className="max-h-full max-w-full rounded-md object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
     </main>
   );
 }

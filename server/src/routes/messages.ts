@@ -24,6 +24,7 @@ const historyQuerySchema = z.object({
   before: objectIdSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
+const typingSchema = z.object({ isTyping: z.boolean() });
 
 function isParticipant(participants: Types.ObjectId[], userId: string): boolean {
   return participants.some((participant) => participant.toString() === userId);
@@ -40,6 +41,32 @@ function messageForUser(message: Message & { _id: Types.ObjectId }, userId: stri
 }
 
 export async function messageRoutes(app: FastifyInstance): Promise<void> {
+  app.post(
+    "/conversations/:conversationId/typing",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const { conversationId } = parseInput(routeSchema, request.params);
+      const { isTyping } = parseInput(typingSchema, request.body);
+      const conversation = await ConversationModel.findById(conversationId)
+        .select("participants")
+        .lean();
+      if (!conversation || !isParticipant(conversation.participants, request.user.sub)) {
+        throw new HttpError(404, "Conversa não encontrada");
+      }
+
+      for (const participantId of conversation.participants) {
+        const recipientUserId = participantId.toString();
+        if (recipientUserId === request.user.sub) continue;
+        app.io.to(`user:${recipientUserId}`).emit("typing:changed", {
+          conversationId,
+          userId: request.user.sub,
+          isTyping,
+        });
+      }
+      return reply.code(204).send();
+    },
+  );
+
   app.post(
     "/conversations/:conversationId/messages",
     { preHandler: app.authenticate },

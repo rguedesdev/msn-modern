@@ -1,7 +1,10 @@
+import type { ChatImagePayload } from "./chatPayload";
+
 export interface ChatMessage {
   id: number | string;
   author: "me" | "contact";
   text: string;
+  image?: ChatImagePayload;
   receivedAt?: number;
 }
 

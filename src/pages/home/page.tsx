@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 
 // Importa as funções nativas do Tauri para controle de janelas
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow"; // Para cria
 
@@ -34,6 +34,9 @@ import {
   OPEN_CONVERSATION_FROM_NOTIFICATION_EVENT,
   type OpenConversationFromNotificationPayload,
 } from "../../shared/constants/NotificationEvents";
+import {
+  TYPING_CHANGED_EVENT,
+} from "../../shared/constants/TypingEvents";
 import {
   CONTACT_STATUS_FRAMES,
   toContactStatus,
@@ -92,6 +95,7 @@ import { ImMakeGroup } from "react-icons/im";
 import AnimeAds from "../../assets/images/ads-anime.jpg";
 import onlineSound from "../../assets/sounds/msn-online.mp3";
 import messageSound from "../../assets/sounds/msn-message.mp3";
+import { decodeChatPayload } from "../../shared/utils/chatPayload";
 
 interface Contact {
   id: string;
@@ -875,7 +879,11 @@ function HomePage() {
     try {
       const conversationWindow = await WebviewWindow.getByLabel(`chat-${conversationId}`);
       if (!conversationWindow) return true;
-      return await conversationWindow.isMinimized();
+      const [isFocused, isMinimized] = await Promise.all([
+        conversationWindow.isFocused(),
+        conversationWindow.isMinimized(),
+      ]);
+      return isMinimized || !isFocused;
     } catch (error) {
       console.error("Erro ao verificar o estado da janela de conversa:", error);
       return true;
@@ -1008,11 +1016,15 @@ function HomePage() {
             (item) => item.recipientDeviceId === identity.deviceId,
           );
           if (envelope) {
-            text = await decryptEnvelope(
+            const decryptedPayload = await decryptEnvelope(
               user.id,
               encryptedMessage.conversationId,
               envelope.payload,
             );
+            const decodedPayload = decodeChatPayload(decryptedPayload);
+            text = decodedPayload.type === "image"
+              ? "Enviou uma imagem."
+              : decodedPayload.text;
           }
         } catch (error) {
           console.error("Não foi possível descriptografar a prévia da notificação:", error);
@@ -1159,6 +1171,15 @@ function HomePage() {
         const result = changed ? updated : current;
         contatosRef.current = result;
         return result;
+      });
+    }, (typing) => {
+      if (!isTauri()) return;
+      void emitTo(
+        `chat-${typing.conversationId}`,
+        TYPING_CHANGED_EVENT,
+        typing,
+      ).catch((error) => {
+        console.error("Erro ao encaminhar indicador de digitação:", error);
       });
     });
     realtimeSocketRef.current = socket;

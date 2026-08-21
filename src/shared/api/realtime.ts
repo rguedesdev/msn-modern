@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import { API_URL, getSession, refreshSession } from "./client";
+import { API_URL, apiRequest, getSession, refreshSession } from "./client";
 import type { NameEffect, ProfileFrame } from "../constants/ProfileStyle/page";
 
 export interface EncryptedMessageNotification {
@@ -15,6 +15,22 @@ export interface EncryptedMessageNotification {
 export interface NudgeNotification {
   conversationId: string;
   senderUserId: string;
+}
+
+export interface TypingNotification {
+  conversationId: string;
+  userId: string;
+  isTyping: boolean;
+}
+
+export async function setConversationTyping(
+  conversationId: string,
+  isTyping: boolean,
+): Promise<void> {
+  await apiRequest<void>(`/conversations/${conversationId}/typing`, {
+    method: "POST",
+    body: JSON.stringify({ isTyping }),
+  });
 }
 
 export interface RealtimeProfile {
@@ -50,6 +66,7 @@ export function connectRealtime(
   onStatusChanged?: (status: RealtimeStatus) => void,
   initialStatus?: RealtimeUserStatus,
   onAccountChanged?: (account: RealtimeAccount) => void,
+  onTypingChanged?: (typing: TypingNotification) => void,
 ): Socket | null {
   const session = getSession();
   if (!session) return null;
@@ -99,5 +116,6 @@ export function connectRealtime(
   if (onStatusSnapshot) socket.on("status:snapshot", onStatusSnapshot);
   if (onStatusChanged) socket.on("status:changed", onStatusChanged);
   if (onAccountChanged) socket.on("account:changed", onAccountChanged);
+  if (onTypingChanged) socket.on("typing:changed", onTypingChanged);
   return socket;
 }
