@@ -10,6 +10,8 @@ export interface ApiConversationParticipant extends Pick<
 export interface ApiConversation {
   _id: string;
   kind: "direct" | "group";
+  name?: string;
+  avatarUrl?: string;
   participants: ApiConversationParticipant[];
   createdAt: string;
   updatedAt: string;
@@ -49,4 +51,27 @@ export async function inviteConversationParticipant(
     method: "POST",
     body: JSON.stringify({ participantUserId }),
   });
+}
+
+export async function updateGroupName(
+  conversationId: string,
+  name: string,
+): Promise<void> {
+  await apiRequest(`/conversations/${conversationId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function uploadGroupAvatar(
+  conversationId: string,
+  file: File,
+): Promise<string> {
+  const body = new FormData();
+  body.append("avatar", file);
+  const response = await apiRequest<{ avatarUrl: string }>(
+    `/conversations/${conversationId}/avatar`,
+    { method: "POST", body },
+  );
+  return response.avatarUrl;
 }

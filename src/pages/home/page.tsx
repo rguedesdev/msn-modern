@@ -808,9 +808,11 @@ function HomePage() {
           userId: participant._id,
           participantUserIds: otherParticipants.map((candidate) => candidate._id),
           name: isGroup
-            ? otherParticipants.map((candidate) => candidate.displayName).join(", ")
+            ? conversation.name?.trim() || otherParticipants.map((candidate) => candidate.displayName).join(", ")
             : participant.displayName,
-          avatarUrl: participant.avatarUrl ?? "",
+          avatarUrl: isGroup
+            ? conversation.avatarUrl || participant.avatarUrl || ""
+            : participant.avatarUrl ?? "",
           profileFrame: participant.profileFrame ?? "status",
           nameEffect: participant.nameEffect ?? "default",
           status: otherParticipants.some((candidate) => onlineUserIdsRef.current.has(candidate._id))
@@ -1157,6 +1159,12 @@ function HomePage() {
       );
       setContatos((current) => {
         const updated = current.map((contact) => {
+          if (contact.kind === "direct") {
+            return {
+              ...contact,
+              status: statusByUserId.get(contact.userId) ?? "offline",
+            };
+          }
           const status: ContactStatus = contact.participantUserIds.some(
             (participantUserId) => (statusByUserId.get(participantUserId) ?? "offline") !== "offline",
           ) ? "online" : "offline";
@@ -1179,6 +1187,11 @@ function HomePage() {
       setContatos((current) => {
         let changed = false;
         const updated = current.map((contact) => {
+          if (contact.kind === "direct") {
+            if (contact.userId !== userId || contact.status === contactStatus) return contact;
+            changed = true;
+            return { ...contact, status: contactStatus };
+          }
           if (!contact.participantUserIds.includes(userId)) return contact;
           const nextStatus: ContactStatus = contact.participantUserIds.some(
             (participantUserId) => onlineUserIdsRef.current.has(participantUserId),
@@ -1691,11 +1704,14 @@ function HomePage() {
   // 4. Função que filtra quais contatos aparecem baseando-se na aba ativa
   const getFiltrados = () => {
     const normalizedSearch = contactSearch.trim().toLocaleLowerCase("pt-BR");
+    const visibleContacts = activeTab === "grupos"
+      ? contatos
+      : contatos.filter((contact) => contact.kind === "direct");
     const searched = normalizedSearch
-      ? contatos.filter((contact) =>
+      ? visibleContacts.filter((contact) =>
           `${contact.name} ${contact.msg}`.toLocaleLowerCase("pt-BR").includes(normalizedSearch),
         )
-      : contatos;
+      : visibleContacts;
     if (activeTab === "online") return searched.filter((c) => c.status !== "offline");
     if (activeTab === "offlines") return searched.filter((c) => c.status === "offline");
     return searched;
@@ -2529,7 +2545,7 @@ function HomePage() {
                 {contactsError}
               </p>
             )}
-            {!isLoadingContacts && !contactsError && contatos.length === 0 && (
+            {!isLoadingContacts && !contactsError && getFiltrados().length === 0 && (
               <p className="py-4 text-center text-xs italic text-[#7894a2]">
                 Nenhum contato. Use o botão de adicionar pessoa acima.
               </p>

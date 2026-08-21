@@ -5,6 +5,7 @@ import {
   useRef,
   useCallback,
   useMemo,
+  type FormEvent,
 } from "react";
 import { useParams } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
@@ -44,6 +45,8 @@ import {
   getConversation,
   inviteConversationParticipant,
   listConversations,
+  updateGroupName,
+  uploadGroupAvatar,
   type ApiConversation,
   type ApiConversationParticipant,
 } from "../../shared/api/conversations";
@@ -72,8 +75,10 @@ import {
   MdCropSquare,
   MdDone,
   MdDoneAll,
+  MdEdit,
   MdKeyboardArrowDown,
   MdMinimize,
+  MdPhotoCamera,
   MdOutlineVideoChat,
   MdPersonAddAlt,
   MdVoiceChat,
@@ -1611,6 +1616,11 @@ function ChatWindow() {
   const [invitingUserId, setInvitingUserId] = useState("");
   const [inviteError, setInviteError] = useState("");
   const [inviteCandidates, setInviteCandidates] = useState<ApiConversationParticipant[]>([]);
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false);
+  const [groupNameDraft, setGroupNameDraft] = useState("");
+  const [isSavingGroupName, setIsSavingGroupName] = useState(false);
+  const [isUploadingGroupAvatar, setIsUploadingGroupAvatar] = useState(false);
+  const [groupCustomizationError, setGroupCustomizationError] = useState("");
   const [maximizedImage, setMaximizedImage] = useState<ChatImagePayload | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
     id ? getChatMessages(id) : [],
@@ -1618,6 +1628,7 @@ function ChatWindow() {
   const messagesRef = useRef(messages);
   const messageInputRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const groupAvatarInputRef = useRef<HTMLInputElement>(null);
   const emoticonPickerRef = useRef<HTMLDivElement>(null);
   const editorSelectionRef = useRef<Range | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -1752,8 +1763,11 @@ function ChatWindow() {
   ) ?? [];
   const isGroupConversation = conversation?.kind === "group";
   const conversationTitle = isGroupConversation
-    ? otherParticipants.map((participant) => participant.displayName).join(", ")
+    ? conversation.name?.trim() || otherParticipants.map((participant) => participant.displayName).join(", ")
     : contactName;
+  const conversationAvatarUrl = isGroupConversation
+    ? conversation.avatarUrl || contactAvatarUrl
+    : contactAvatarUrl;
   const conversationStatusLabel = isGroupConversation
     ? `${conversation?.participants.length ?? 0} participantes`
     : contactStatusLabel;
@@ -1767,6 +1781,55 @@ function ChatWindow() {
     setConversation(updatedConversation);
     return updatedConversation;
   }, [id]);
+
+  const handleSaveGroupName = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!id || !isGroupConversation || isSavingGroupName) return;
+    const name = groupNameDraft.trim();
+    if (!name) {
+      setGroupCustomizationError("Informe um nome para o grupo.");
+      return;
+    }
+    setIsSavingGroupName(true);
+    setGroupCustomizationError("");
+    try {
+      await updateGroupName(id, name);
+      await refreshConversation();
+      setIsEditingGroupName(false);
+    } catch (error) {
+      setGroupCustomizationError(
+        error instanceof Error ? error.message : "Não foi possível alterar o nome do grupo",
+      );
+    } finally {
+      setIsSavingGroupName(false);
+    }
+  };
+
+  const handleGroupAvatarChange = async (file: File | undefined) => {
+    if (!file || !id || !isGroupConversation || isUploadingGroupAvatar) return;
+    setGroupCustomizationError("");
+    if (!/^image\/(?:jpeg|png|webp)$/.test(file.type)) {
+      setGroupCustomizationError("Escolha uma imagem JPG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setGroupCustomizationError("A imagem deve ter no máximo 5 MB.");
+      return;
+    }
+
+    setIsUploadingGroupAvatar(true);
+    try {
+      await uploadGroupAvatar(id, file);
+      await refreshConversation();
+    } catch (error) {
+      setGroupCustomizationError(
+        error instanceof Error ? error.message : "Não foi possível alterar a imagem do grupo",
+      );
+    } finally {
+      setIsUploadingGroupAvatar(false);
+      if (groupAvatarInputRef.current) groupAvatarInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -2826,32 +2889,125 @@ function ChatWindow() {
                 : "w-28"
             }`}
           >
-            <PictureFrame
-              frame={contactProfileFrame}
-              status={toContactStatus(contactStatus)}
-              imageSrc={resolveApiAssetUrl(contactAvatarUrl) || undefined}
-              imageAlt={isGroupConversation ? "Foto da conversa em grupo" : `Foto de perfil de ${contactName}`}
-              displayName={conversationTitle}
-              imageSize={96}
-            />
+            {isGroupConversation ? (
+              <div className="relative">
+                <input
+                  ref={groupAvatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(event) => void handleGroupAvatarChange(event.target.files?.[0])}
+                />
+                <button
+                  type="button"
+                  aria-label="Alterar imagem do grupo"
+                  title="Alterar imagem do grupo"
+                  disabled={isUploadingGroupAvatar}
+                  onClick={() => groupAvatarInputRef.current?.click()}
+                  className="group relative rounded-xl disabled:cursor-wait"
+                >
+                  <PictureFrame
+                    frame="status"
+                    status="online"
+                    imageSrc={resolveApiAssetUrl(conversationAvatarUrl) || undefined}
+                    imageAlt="Foto da conversa em grupo"
+                    displayName={conversationTitle}
+                    imageSize={96}
+                  />
+                  <span className="absolute inset-x-2 bottom-2 z-20 flex items-center justify-center gap-1 rounded-md bg-[#183846]/80 px-1.5 py-1 text-[10px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                    <MdPhotoCamera size={13} />
+                    {isUploadingGroupAvatar ? "Enviando..." : "Alterar imagem"}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <PictureFrame
+                frame={contactProfileFrame}
+                status={toContactStatus(contactStatus)}
+                imageSrc={resolveApiAssetUrl(conversationAvatarUrl) || undefined}
+                imageAlt={`Foto de perfil de ${contactName}`}
+                displayName={conversationTitle}
+                imageSize={96}
+              />
+            )}
           </aside>
 
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <header className="flex items-start justify-between px-1 pb-2.5">
               <div className="min-w-0">
-                <h1 className="flex min-w-0 items-center gap-1 text-lg font-semibold text-[#284f65]">
-                  <span
-                    className="min-w-0 truncate"
-                    style={!isGroupConversation && contactNameEffect !== "default"
-                      ? getTextEffectStyle(contactNameEffect)
-                      : undefined}
+                {isGroupConversation && isEditingGroupName ? (
+                  <form
+                    className="flex min-w-0 items-center gap-1.5"
+                    onSubmit={(event) => void handleSaveGroupName(event)}
                   >
-                    {conversationTitle}
-                  </span>
-                  <span className="shrink-0 text-sm font-normal italic text-[#67899a]">
-                    ({conversationStatusLabel})
-                  </span>
-                </h1>
+                    <input
+                      autoFocus
+                      type="text"
+                      maxLength={80}
+                      value={groupNameDraft}
+                      disabled={isSavingGroupName}
+                      aria-label="Nome do grupo"
+                      onChange={(event) => setGroupNameDraft(event.target.value)}
+                      className="min-w-0 flex-1 rounded-md border border-[#8ebbd0] bg-white/80 px-2 py-1 text-base font-semibold text-[#284f65] outline-none focus:border-[#4f9dc1] focus:ring-2 focus:ring-[#8dcce8]/35"
+                    />
+                    <button
+                      type="submit"
+                      aria-label="Salvar nome do grupo"
+                      title="Salvar"
+                      disabled={isSavingGroupName || !groupNameDraft.trim()}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#337b66] transition-colors hover:bg-[#d9f1e8] disabled:opacity-45"
+                    >
+                      <MdDone size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Cancelar alteração do nome"
+                      title="Cancelar"
+                      disabled={isSavingGroupName}
+                      onClick={() => {
+                        setIsEditingGroupName(false);
+                        setGroupCustomizationError("");
+                      }}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#8b5555] transition-colors hover:bg-[#f5dddd] disabled:opacity-45"
+                    >
+                      <MdClose size={17} />
+                    </button>
+                  </form>
+                ) : (
+                  <h1 className="flex min-w-0 items-center gap-1 text-lg font-semibold text-[#284f65]">
+                    <span
+                      className="min-w-0 truncate"
+                      style={!isGroupConversation && contactNameEffect !== "default"
+                        ? getTextEffectStyle(contactNameEffect)
+                        : undefined}
+                    >
+                      {conversationTitle}
+                    </span>
+                    {isGroupConversation && (
+                      <button
+                        type="button"
+                        aria-label="Alterar nome do grupo"
+                        title="Alterar nome do grupo"
+                        onClick={() => {
+                          setGroupNameDraft(conversation?.name?.trim() || conversationTitle);
+                          setGroupCustomizationError("");
+                          setIsEditingGroupName(true);
+                        }}
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#5f879b] transition-colors hover:bg-[#d9edf6] hover:text-[#287da5]"
+                      >
+                        <MdEdit size={15} />
+                      </button>
+                    )}
+                    <span className="shrink-0 text-sm font-normal italic text-[#67899a]">
+                      ({conversationStatusLabel})
+                    </span>
+                  </h1>
+                )}
+                {isGroupConversation && groupCustomizationError && (
+                  <p role="alert" className="mt-1 text-xs text-[#b64040]">
+                    {groupCustomizationError}
+                  </p>
+                )}
                 {!isGroupConversation && contactActivity && (
                   <div className="msn-profile-message flex min-w-0 items-center gap-1.5 text-xs italic">
                     {contactMusicSource && (

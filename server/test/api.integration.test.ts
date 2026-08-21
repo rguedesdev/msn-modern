@@ -428,15 +428,50 @@ describe("API com MongoDB", () => {
     expect(groupForCharlie.json().conversation.kind).toBe("group");
     expect(groupForCharlie.json().conversation.participants).toHaveLength(3);
 
+    const renamedGroup = await app.inject({
+      method: "PATCH",
+      url: `/conversations/${conversationId}`,
+      headers: charlieAuth,
+      payload: { name: "Amigos do MSN" },
+    });
+    expect(renamedGroup.statusCode).toBe(200);
+    expect(renamedGroup.json().name).toBe("Amigos do MSN");
+
+    const uploadedGroupAvatar = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/avatar`,
+      headers: {
+        ...charlieAuth,
+        "content-type": `multipart/form-data; boundary=${avatarBoundary}`,
+      },
+      payload: avatarPayload,
+    });
+    expect(uploadedGroupAvatar.statusCode).toBe(201);
+    const groupAvatarUrl = uploadedGroupAvatar.json().avatarUrl as string;
+    expect(groupAvatarUrl).toMatch(
+      new RegExp(`^/conversations/${conversationId}/avatar\\?v=[a-f\\d]{24}&policy=2$`),
+    );
+    expect((await app.inject({ method: "GET", url: groupAvatarUrl })).statusCode).toBe(200);
+
+    const customizedGroupForBob = await app.inject({
+      method: "GET",
+      url: `/conversations/${conversationId}`,
+      headers: bobAuth,
+    });
+    expect(customizedGroupForBob.statusCode).toBe(200);
+    expect(customizedGroupForBob.json().conversation).toMatchObject({
+      name: "Amigos do MSN",
+      avatarUrl: groupAvatarUrl,
+    });
+
     const oldHistoryForCharlie = await app.inject({
       method: "GET",
       url: `/conversations/${conversationId}/messages?limit=100`,
       headers: charlieAuth,
     });
     expect(oldHistoryForCharlie.statusCode).toBe(200);
-    expect(oldHistoryForCharlie.json().messages.every(
-      (message: { envelopes: unknown[] }) => message.envelopes.length === 0,
-    )).toBe(true);
+    expect(oldHistoryForCharlie.json().messages).toEqual([]);
+    expect(oldHistoryForCharlie.json().nextCursor).toBeNull();
 
     const conversationsAfterInvite = await app.inject({
       method: "GET",
@@ -446,9 +481,16 @@ describe("API com MongoDB", () => {
     const aliceConversations = conversationsAfterInvite.json().conversations as Array<{
       _id: string;
       kind: string;
+      name?: string;
+      avatarUrl?: string;
       participants: Array<{ _id: string }>;
     }>;
-    expect(aliceConversations.some((item) => item._id === conversationId && item.kind === "group")).toBe(true);
+    expect(aliceConversations.some((item) =>
+      item._id === conversationId &&
+      item.kind === "group" &&
+      item.name === "Amigos do MSN" &&
+      item.avatarUrl === groupAvatarUrl
+    )).toBe(true);
     expect(aliceConversations.some((item) =>
       item.kind === "direct" &&
       item.participants.some((participant) => participant._id === bob.user.id)
@@ -480,6 +522,16 @@ describe("API com MongoDB", () => {
     });
     expect(groupMessage.statusCode).toBe(201);
     const groupMessageId = groupMessage.json().message._id as string;
+
+    const currentHistoryForCharlie = await app.inject({
+      method: "GET",
+      url: `/conversations/${conversationId}/messages?limit=100`,
+      headers: charlieAuth,
+    });
+    expect(currentHistoryForCharlie.statusCode).toBe(200);
+    expect(currentHistoryForCharlie.json().messages).toHaveLength(1);
+    expect(currentHistoryForCharlie.json().messages[0]._id).toBe(groupMessageId);
+    expect(currentHistoryForCharlie.json().messages[0].envelopes).toHaveLength(1);
 
     const bobDeliveredGroupMessage = await app.inject({
       method: "POST",

@@ -93,9 +93,11 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
           readUserIds.add(request.user.sub);
           changed = true;
         }
-        const recipientUserIds = conversation.participants
-          .map(String)
-          .filter((participantId) => participantId !== message.senderUserId.toString());
+        const recipientUserIds = [...new Set(
+          message.envelopes
+            .map((envelope) => envelope.recipientUserId.toString())
+            .filter((participantId) => participantId !== message.senderUserId.toString()),
+        )];
         if (!message.deliveredAt && recipientUserIds.every((userId) => deliveredUserIds.has(userId))) {
           message.deliveredAt = acknowledgedAt;
           changed = true;
@@ -246,7 +248,13 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(404, "Conversa não encontrada");
       }
 
-      const filter: Record<string, unknown> = { conversationId };
+      const filter: Record<string, unknown> = {
+        conversationId,
+        $or: [
+          { senderUserId: request.user.sub },
+          { "envelopes.recipientUserId": request.user.sub },
+        ],
+      };
       if (query.before) filter._id = { $lt: query.before };
       const messages = await MessageModel.find(filter)
         .sort({ _id: -1 })

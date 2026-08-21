@@ -9,10 +9,30 @@ import { UserModel } from "../models/user.js";
 const createDirectSchema = z.object({ participantUserId: objectIdSchema });
 const inviteParticipantSchema = z.object({ participantUserId: objectIdSchema });
 const conversationParamsSchema = z.object({ conversationId: objectIdSchema });
+const updateGroupSchema = z.object({
+  name: z.string().trim().min(1, "Informe um nome para o grupo").max(80),
+});
 const MAX_GROUP_PARTICIPANTS = 20;
 
 function hasParticipant(participants: Types.ObjectId[], userId: string): boolean {
   return participants.some((participant) => participant.toString() === userId);
+}
+
+function groupAvatarUrl(conversationId: string, avatarFileId?: Types.ObjectId): string {
+  return avatarFileId
+    ? `/conversations/${conversationId}/avatar?v=${avatarFileId.toString()}&policy=2`
+    : "";
+}
+
+function notifyConversationChanged(app: FastifyInstance, conversation: {
+  _id: Types.ObjectId;
+  participants: Types.ObjectId[];
+}) {
+  for (const participantId of conversation.participants) {
+    app.io.to(`user:${participantId.toString()}`).emit("conversation:changed", {
+      conversationId: conversation._id.toString(),
+    });
+  }
 }
 
 export async function conversationRoutes(app: FastifyInstance): Promise<void> {
@@ -60,21 +80,25 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       )
       .lean();
     return {
-      conversations: conversations.map((conversation) => ({
-        ...conversation,
-        participants: conversation.participants.map((participant) => {
-          const { avatarFileId, ...publicParticipant } = participant;
-          const participantId = participant._id.toString();
-          return {
-            ...publicParticipant,
-            avatarUrl: avatarFileId
-              ? `/users/${participantId}/avatar?v=${avatarFileId.toString()}&policy=2`
-              : "",
-            profileFrame: participant.profileFrame ?? "status",
-            nameEffect: participant.nameEffect ?? "default",
-          };
-        }),
-      })),
+      conversations: conversations.map((conversation) => {
+        const { avatarFileId, ...publicConversation } = conversation;
+        return {
+          ...publicConversation,
+          avatarUrl: groupAvatarUrl(conversation._id.toString(), avatarFileId),
+          participants: conversation.participants.map((participant) => {
+            const { avatarFileId, ...publicParticipant } = participant;
+            const participantId = participant._id.toString();
+            return {
+              ...publicParticipant,
+              avatarUrl: avatarFileId
+                ? `/users/${participantId}/avatar?v=${avatarFileId.toString()}&policy=2`
+                : "",
+              profileFrame: participant.profileFrame ?? "status",
+              nameEffect: participant.nameEffect ?? "default",
+            };
+          }),
+        };
+      }),
     };
   });
 
@@ -108,9 +132,11 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(404, "Conversa não encontrada");
       }
       const object = conversation.toObject();
+      const { avatarFileId, ...publicConversation } = object;
       return {
         conversation: {
-          ...object,
+          ...publicConversation,
+          avatarUrl: groupAvatarUrl(conversation._id.toString(), avatarFileId),
           participants: object.participants.map((participant) => {
             const { avatarFileId, ...publicParticipant } = participant;
             const participantId = participant._id.toString();
@@ -125,6 +151,29 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
           }),
         },
       };
+    },
+  );
+
+  app.patch(
+    "/conversations/:conversationId",
+    { preHandler: app.authenticate },
+    async (request) => {
+      const { conversationId } = parseInput(conversationParamsSchema, request.params);
+      const { name } = parseInput(updateGroupSchema, request.body);
+      const conversation = await ConversationModel.findOneAndUpdate(
+        {
+          _id: conversationId,
+          kind: "group",
+          participants: request.user.sub,
+        },
+        { $set: { name } },
+        { returnDocument: "after" },
+      );
+      if (!conversation) {
+        throw new HttpError(404, "Conversa em grupo não encontrada");
+      }
+      notifyConversationChanged(app, conversation);
+      return { conversationId: conversation._id.toString(), name: conversation.name };
     },
   );
 
@@ -175,11 +224,7 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
       conversation.participants.push(new Types.ObjectId(participantUserId));
       await conversation.save();
 
-      for (const participantId of conversation.participants) {
-        app.io.to(`user:${participantId.toString()}`).emit("conversation:changed", {
-          conversationId: conversation._id.toString(),
-        });
-      }
+      notifyConversationChanged(app, conversation);
 
       return reply.code(201).send({ conversationId: conversation._id.toString() });
     },
