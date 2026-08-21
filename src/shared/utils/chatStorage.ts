@@ -1,4 +1,4 @@
-import type { ChatImagePayload } from "./chatPayload";
+import { decodeChatPayload, type ChatImagePayload } from "./chatPayload";
 
 export interface ChatMessage {
   id: number | string;
@@ -22,23 +22,36 @@ export function getChatMessages(chatId: string): ChatMessage[] {
     const parsedMessages: unknown = JSON.parse(storedMessages);
     if (!Array.isArray(parsedMessages)) return [];
 
-    let didMigrateReceivedAt = false;
+    let didMigrateStoredMessages = false;
     const migrationTime = Date.now();
     const messages = (parsedMessages as ChatMessage[]).map((message) => {
-      if (message.author !== "contact" || message.receivedAt) {
-        return message;
+      let normalizedMessage = message;
+      if (!message.image && typeof message.text === "string") {
+        const decodedPayload = decodeChatPayload(message.text);
+        if (decodedPayload.type === "image") {
+          didMigrateStoredMessages = true;
+          normalizedMessage = {
+            ...message,
+            text: decodedPayload.image.caption ?? "",
+            image: decodedPayload.image,
+          };
+        }
       }
 
-      didMigrateReceivedAt = true;
+      if (normalizedMessage.author !== "contact" || normalizedMessage.receivedAt) {
+        return normalizedMessage;
+      }
+
+      didMigrateStoredMessages = true;
       const idContainsTimestamp = typeof message.id === "number" && message.id >= 1_000_000_000_000;
 
       return {
-        ...message,
+        ...normalizedMessage,
         receivedAt: idContainsTimestamp && typeof message.id === "number" ? message.id : migrationTime,
       };
     });
 
-    if (didMigrateReceivedAt) {
+    if (didMigrateStoredMessages) {
       localStorage.setItem(getStorageKey(chatId), JSON.stringify(messages));
     }
 

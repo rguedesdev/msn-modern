@@ -23,7 +23,7 @@ export function decodeChatPayload(payload: string): DecodedChatPayload {
     const image = JSON.parse(payload.slice(IMAGE_PAYLOAD_PREFIX.length)) as Partial<ChatImagePayload>;
     if (
       typeof image.dataUrl === "string" &&
-      /^data:image\/(?:jpeg|png|webp);base64,/.test(image.dataUrl) &&
+      /^data:image\/(?:jpeg|jpg|png|webp)(?:;[^,]*)?;base64,/i.test(image.dataUrl) &&
       typeof image.name === "string"
     ) {
       return {
@@ -36,8 +36,11 @@ export function decodeChatPayload(payload: string): DecodedChatPayload {
       };
     }
   } catch {
-    // Conteúdo inválido continua visível como texto em vez de ser descartado.
+    // O conteúdo reservado para imagem nunca deve vazar como texto na conversa.
   }
 
-  return { type: "text", text: payload };
+  return {
+    type: "text",
+    text: "Não foi possível exibir a imagem recebida.",
+  };
 }
