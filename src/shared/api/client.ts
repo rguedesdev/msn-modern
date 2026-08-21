@@ -257,7 +257,7 @@ export async function apiRequest<T>(
 
 export function resolveApiAssetUrl(path: string | undefined): string {
   if (!path) return "";
-  if (/^(?:data:|https?:)/.test(path)) return path;
+  if (/^(?:blob:|data:|https?:)/.test(path)) return path;
   return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 

@@ -431,6 +431,26 @@ html[data-msn-theme="dark"] .msn-typing-dot {
   background-color: #63c7e8;
 }
 
+.msn-day-separator-line {
+  height: 1px;
+}
+
+.msn-day-separator-line--left {
+  background-image: linear-gradient(to right, transparent, #c4dbe5);
+}
+
+.msn-day-separator-line--right {
+  background-image: linear-gradient(to left, transparent, #c4dbe5);
+}
+
+html[data-msn-theme="dark"] .msn-day-separator-line--left {
+  background-image: linear-gradient(to right, transparent, #285d72);
+}
+
+html[data-msn-theme="dark"] .msn-day-separator-line--right {
+  background-image: linear-gradient(to left, transparent, #285d72);
+}
+
 html[data-msn-theme="dark"] .msn-settings-trigger {
   box-shadow: none !important;
 }
@@ -438,6 +458,7 @@ html[data-msn-theme="dark"] .msn-settings-trigger {
 html[data-msn-theme="dark"] .msn-status-picker button[class~="border-white"],
 html[data-msn-theme="dark"] .msn-status-picker button[class~="hover:border-white"]:hover,
 html[data-msn-theme="dark"] .msn-settings-trigger[class~="border-white"],
-html[data-msn-theme="dark"] .msn-settings-trigger[class~="hover:border-white"]:hover {
+html[data-msn-theme="dark"] .msn-settings-trigger[class~="hover:border-white"]:hover,
+html[data-msn-theme="dark"] .msn-settings-trigger[class~="enabled:hover:border-white"]:enabled:hover {
   border-color: #326b80 !important;
 }

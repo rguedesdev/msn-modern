@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useState,
   useEffect,
   useLayoutEffect,
@@ -1370,7 +1371,10 @@ const EDITOR_CARET_ANCHOR = "\u200B";
 const TASKBAR_BLINK_INTERVAL_MS = 600;
 const TASKBAR_BLINK_DURATION_MS = TASKBAR_BLINK_INTERVAL_MS * 7;
 const TYPING_HEARTBEAT_MS = 3_000;
-const REMOTE_TYPING_TIMEOUT_MS = 8_000;
+// WebViews e abas em segundo plano podem limitar temporizadores. Este prazo é
+// apenas uma recuperação para conexões interrompidas; o evento `false` remove
+// imediatamente quem apagou ou enviou o conteúdo.
+const REMOTE_TYPING_TIMEOUT_MS = 75_000;
 const MAX_CHAT_IMAGE_INPUT_SIZE = 5 * 1024 * 1024;
 const MAX_CHAT_IMAGE_OUTPUT_SIZE = 160 * 1024;
 const MAX_CHAT_IMAGE_DIMENSION = 1280;
@@ -1581,6 +1585,24 @@ function formatMessageTime(sentAt: number) {
   }).format(new Date(sentAt));
 }
 
+function messageDayKey(sentAt: number) {
+  const date = new Date(sentAt);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function formatMessageDay(sentAt: number) {
+  const date = new Date(sentAt);
+  if (messageDayKey(sentAt) === messageDayKey(Date.now())) return "Hoje";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
 function ChatWindow() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -1608,8 +1630,7 @@ function ChatWindow() {
   const [isSending, setIsSending] = useState(false);
   const [isPreparingImage, setIsPreparingImage] = useState(false);
   const [pendingImage, setPendingImage] = useState<ChatImagePayload | null>(null);
-  const [isContactTyping, setIsContactTyping] = useState(false);
-  const [typingUserId, setTypingUserId] = useState("");
+  const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
   const [conversation, setConversation] = useState<ApiConversation | null>(null);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isLoadingInviteCandidates, setIsLoadingInviteCandidates] = useState(false);
@@ -1643,7 +1664,7 @@ function ChatWindow() {
   const taskbarBlinkEndTimerRef = useRef<number | undefined>(undefined);
   const realtimeSocketRef = useRef<Socket | null>(null);
   const typingHeartbeatIntervalRef = useRef<number | undefined>(undefined);
-  const remoteTypingTimerRef = useRef<number | undefined>(undefined);
+  const remoteTypingTimersRef = useRef(new Map<string, number>());
   const isTypingSentRef = useRef(false);
   const typingGenerationRef = useRef(0);
   const typingRequestQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1771,9 +1792,13 @@ function ChatWindow() {
   const conversationStatusLabel = isGroupConversation
     ? `${conversation?.participants.length ?? 0} participantes`
     : contactStatusLabel;
-  const typingDisplayName = conversation?.participants.find(
-    (participant) => participant._id === typingUserId,
-  )?.displayName ?? contactName;
+  const isContactTyping = typingUserIds.length > 0;
+  const individuallyDisplayedTypingUserIds =
+    isGroupConversation && typingUserIds.length > 2
+      ? typingUserIds.slice(0, 2)
+      : typingUserIds;
+  const additionalTypingUsersCount =
+    typingUserIds.length - individuallyDisplayedTypingUserIds.length;
 
   const refreshConversation = useCallback(async () => {
     if (!id) return null;
@@ -1954,21 +1979,33 @@ function ChatWindow() {
     setIsVideoCallOpen((isOpen) => !isOpen);
   };
 
+  const clearRemoteTypingUser = useCallback((userId: string) => {
+    const timer = remoteTypingTimersRef.current.get(userId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    remoteTypingTimersRef.current.delete(userId);
+    setTypingUserIds((current) => current.filter((id) => id !== userId));
+  }, []);
+
   const handleRemoteTyping = useCallback((typing: TypingNotification) => {
     if (typing.conversationId !== id || typing.userId === user?.id) return;
-    if (remoteTypingTimerRef.current !== undefined) {
-      window.clearTimeout(remoteTypingTimerRef.current);
-      remoteTypingTimerRef.current = undefined;
+
+    const currentTimer = remoteTypingTimersRef.current.get(typing.userId);
+    if (currentTimer !== undefined) window.clearTimeout(currentTimer);
+    remoteTypingTimersRef.current.delete(typing.userId);
+
+    if (!typing.isTyping) {
+      setTypingUserIds((current) => current.filter((userId) => userId !== typing.userId));
+      return;
     }
-    setIsContactTyping(typing.isTyping);
-    setTypingUserId(typing.isTyping ? typing.userId : "");
-    if (typing.isTyping) {
-      remoteTypingTimerRef.current = window.setTimeout(() => {
-        setIsContactTyping(false);
-        setTypingUserId("");
-        remoteTypingTimerRef.current = undefined;
-      }, REMOTE_TYPING_TIMEOUT_MS);
-    }
+
+    setTypingUserIds((current) =>
+      current.includes(typing.userId) ? current : [...current, typing.userId],
+    );
+    const timer = window.setTimeout(() => {
+      remoteTypingTimersRef.current.delete(typing.userId);
+      setTypingUserIds((current) => current.filter((userId) => userId !== typing.userId));
+    }, REMOTE_TYPING_TIMEOUT_MS);
+    remoteTypingTimersRef.current.set(typing.userId, timer);
   }, [id, user?.id]);
 
   const publishTypingState = useCallback((isTyping: boolean) => {
@@ -2405,6 +2442,7 @@ function ChatWindow() {
   useEffect(() => {
     if (!id || !user) return;
     let cancelled = false;
+    const remoteTypingTimers = remoteTypingTimersRef.current;
     void registerCurrentDevice(user.id)
       .then(() => listEncryptedMessages(id))
       .then((history) => Promise.all(history.map(decryptApiMessage)))
@@ -2426,12 +2464,7 @@ function ChatWindow() {
     const socket = connectRealtime(
       (incoming) => {
         if (incoming.conversationId !== id || incoming.senderUserId === user.id) return;
-        setIsContactTyping(false);
-        setTypingUserId("");
-        if (remoteTypingTimerRef.current !== undefined) {
-          window.clearTimeout(remoteTypingTimerRef.current);
-          remoteTypingTimerRef.current = undefined;
-        }
+        clearRemoteTypingUser(incoming.senderUserId);
         void decryptApiMessage(incoming as ApiEncryptedMessage).then((decrypted) => {
           if (!decrypted || cancelled) return;
           const updatedMessages = appendChatMessage(id, decrypted);
@@ -2509,17 +2542,14 @@ function ChatWindow() {
         window.clearInterval(typingHeartbeatIntervalRef.current);
         typingHeartbeatIntervalRef.current = undefined;
       }
-      if (remoteTypingTimerRef.current !== undefined) {
-        window.clearTimeout(remoteTypingTimerRef.current);
-        remoteTypingTimerRef.current = undefined;
-      }
+      remoteTypingTimers.forEach((timer) => window.clearTimeout(timer));
+      remoteTypingTimers.clear();
       isTypingSentRef.current = false;
-      setIsContactTyping(false);
-      setTypingUserId("");
+      setTypingUserIds([]);
       realtimeSocketRef.current = null;
       socket?.disconnect();
     };
-  }, [acknowledgeReceivedMessages, appWindow, applyMessageStatuses, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, publishTypingState, refreshConversation, user]);
+  }, [acknowledgeReceivedMessages, appWindow, applyMessageStatuses, blinkTaskbarInAmber, clearRemoteTypingUser, contactUserId, decryptApiMessage, handleRemoteTyping, id, publishTypingState, refreshConversation, user]);
 
   const saveEditorSelection = () => {
     const editor = messageInputRef.current;
@@ -2597,7 +2627,7 @@ function ChatWindow() {
       behavior: "smooth",
       top: messagesContainer.scrollHeight,
     });
-  }, [messages, isContactTyping]);
+  }, [messages, typingUserIds]);
 
   useEffect(() => {
     return () => {
@@ -2968,7 +2998,7 @@ function ChatWindow() {
                         setIsEditingGroupName(false);
                         setGroupCustomizationError("");
                       }}
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#8b5555] transition-colors hover:bg-[#f5dddd] disabled:opacity-45"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-red-500 text-red-600 transition-all duration-200 ease-in-out hover:border-red-700 hover:bg-red-700 hover:text-white hover:shadow-[0_2px_6px_rgba(185,28,28,0.28)] disabled:opacity-45"
                     >
                       <MdClose size={17} />
                     </button>
@@ -3035,15 +3065,40 @@ function ChatWindow() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
-                  {messages.map((chatMessage) => (
-                    <div
-                      key={chatMessage.id}
-                      className={`flex flex-col ${
-                        chatMessage.author === "me"
-                          ? "items-end"
-                          : "items-start"
-                      }`}
-                    >
+                  {messages.map((chatMessage, messageIndex) => {
+                    const previousMessage = messages[messageIndex - 1];
+                    const showDaySeparator = Boolean(
+                      chatMessage.sentAt &&
+                      (!previousMessage?.sentAt ||
+                        messageDayKey(previousMessage.sentAt) !==
+                          messageDayKey(chatMessage.sentAt)),
+                    );
+
+                    return (
+                      <Fragment key={chatMessage.id}>
+                        {showDaySeparator && chatMessage.sentAt && (
+                          <div
+                            role="separator"
+                            aria-label={formatMessageDay(chatMessage.sentAt)}
+                            className="flex w-full items-center gap-2 py-1"
+                          >
+                            <span className="msn-day-separator-line msn-day-separator-line--left min-w-0 flex-1" />
+                            <time
+                              dateTime={messageDayKey(chatMessage.sentAt)}
+                              className="shrink-0 rounded-[5px] border border-[#c4dbe5] bg-white/70 px-3 py-1 text-[10px] font-semibold text-[#7893a0]"
+                            >
+                              {formatMessageDay(chatMessage.sentAt)}
+                            </time>
+                            <span className="msn-day-separator-line msn-day-separator-line--right min-w-0 flex-1" />
+                          </div>
+                        )}
+                        <div
+                          className={`flex flex-col ${
+                            chatMessage.author === "me"
+                              ? "items-end"
+                              : "items-start"
+                          }`}
+                        >
                       <span
                         className="mb-1 px-1 text-xs font-medium text-[#5f7f90]"
                         style={chatMessage.author === "me"
@@ -3109,23 +3164,50 @@ function ChatWindow() {
                           </span>
                         </span>
                       </div>
-                    </div>
-                  ))}
+                        </div>
+                      </Fragment>
+                    );
+                  })}
                 </div>
               )}
               {isContactTyping && (
                 <div
                   aria-live="polite"
-                  className="pointer-events-none mt-3 flex justify-start"
+                  className="pointer-events-none mt-3 flex flex-wrap items-end justify-start gap-2"
                 >
-                  <div className="msn-typing-bubble flex items-center gap-2 rounded-[9px] border border-[#bdd8e5] bg-gradient-to-b from-white to-[#eaf6fb] px-3 py-2 text-xs font-semibold text-[#287da5] shadow-[0_2px_7px_rgba(47,91,113,0.16)]">
-                    <span>{typingDisplayName} está digitando</span>
-                    <span aria-hidden="true" className="flex items-end gap-1 pb-0.5">
-                      <span className="msn-typing-dot" />
-                      <span className="msn-typing-dot" />
-                      <span className="msn-typing-dot" />
-                    </span>
-                  </div>
+                  {individuallyDisplayedTypingUserIds.map((typingUserId) => {
+                    const typingDisplayName = conversation?.participants.find(
+                      (participant) => participant._id === typingUserId,
+                    )?.displayName ?? (isGroupConversation ? "Participante" : contactName);
+
+                    return (
+                      <div
+                        key={typingUserId}
+                        className="msn-typing-bubble flex items-center gap-2 rounded-[9px] border border-[#bdd8e5] bg-gradient-to-b from-white to-[#eaf6fb] px-3 py-2 text-xs font-semibold text-[#287da5] shadow-[0_2px_7px_rgba(47,91,113,0.16)]"
+                      >
+                        <span>{typingDisplayName} está digitando</span>
+                        <span aria-hidden="true" className="flex items-end gap-1 pb-0.5">
+                          <span className="msn-typing-dot" />
+                          <span className="msn-typing-dot" />
+                          <span className="msn-typing-dot" />
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {additionalTypingUsersCount > 0 && (
+                    <div className="msn-typing-bubble flex items-center gap-2 rounded-[9px] border border-[#bdd8e5] bg-gradient-to-b from-white to-[#eaf6fb] px-3 py-2 text-xs font-semibold text-[#287da5] shadow-[0_2px_7px_rgba(47,91,113,0.16)]">
+                      <span>
+                        {additionalTypingUsersCount === 1
+                          ? "Mais 1 pessoa está digitando"
+                          : `Outras ${additionalTypingUsersCount} pessoas estão digitando`}
+                      </span>
+                      <span aria-hidden="true" className="flex items-end gap-1 pb-0.5">
+                        <span className="msn-typing-dot" />
+                        <span className="msn-typing-dot" />
+                        <span className="msn-typing-dot" />
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               </div>
@@ -3173,7 +3255,7 @@ function ChatWindow() {
                     aria-label="Remover imagem selecionada"
                     title="Remover imagem"
                     onClick={() => setPendingImage(null)}
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#8eabb8] bg-white text-[#52758a] shadow-sm transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-red-500 bg-white text-red-600 shadow-sm transition-all duration-200 ease-in-out hover:border-red-700 hover:bg-red-700 hover:text-white hover:shadow-[0_2px_6px_rgba(185,28,28,0.28)]"
                   >
                     <MdClose aria-hidden="true" size={13} />
                   </button>
@@ -3311,7 +3393,7 @@ function ChatWindow() {
                     aria-haspopup="dialog"
                     onMouseDown={saveEditorSelection}
                     onClick={handleToggleEmoticonPicker}
-                    className={`rounded-md border border-transparent p-1.5 transition-colors hover:border-white hover:bg-white/70 ${
+                    className={`msn-settings-trigger rounded-md border border-transparent p-1.5 transition-colors hover:border-white hover:bg-white/70 ${
                       isEmoticonPickerOpen ? "border-white bg-white/80" : ""
                     }`}
                     title="Emoticons"
@@ -3530,7 +3612,7 @@ function ChatWindow() {
                   type="button"
                   aria-label="Ação do emoticon piscando"
                   title="Ação especial (em breve)"
-                  className="rounded-md border border-transparent p-1.5 transition-colors hover:border-white hover:bg-white/70"
+                  className="msn-settings-trigger rounded-md border border-transparent p-1.5 transition-colors hover:border-white hover:bg-white/70"
                 >
                   <img
                     src={WinkSmileIcon}
@@ -3541,7 +3623,7 @@ function ChatWindow() {
 
                 <button
                   type="button"
-                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="msn-settings-trigger flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={handleSendNudge}
                   disabled={!isGroupConversation && isContactOffline}
                   title={!isGroupConversation && isContactOffline
@@ -3575,7 +3657,7 @@ function ChatWindow() {
                   title="Selecionar imagem"
                   disabled={isSending || isPreparingImage}
                   onClick={() => imageInputRef.current?.click()}
-                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="msn-settings-trigger flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <FcAddImage aria-hidden="true" size={21} />
                 </button>
@@ -3585,7 +3667,7 @@ function ChatWindow() {
                   aria-label="Convidar contato para a conversa"
                   title="Convidar contato"
                   onClick={() => void handleOpenInvite()}
-                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-[#527b90] transition-colors hover:border-white hover:bg-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65afd0]/50"
+                  className="msn-settings-trigger flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-[#527b90] transition-colors hover:border-white hover:bg-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65afd0]/50"
                 >
                   <MdPersonAddAlt aria-hidden="true" size={21} />
                 </button>

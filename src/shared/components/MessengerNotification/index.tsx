@@ -67,7 +67,7 @@ function MessengerNotification({
       <div className="flex items-center gap-3 px-3 py-3 text-left">
         <div className="h-20 w-20 shrink-0">
           <PictureFrame
-            frame={notification.profileFrame ?? "status"}
+            frame="status"
             status={notification.kind === "online"
               ? "online"
               : (notification.status ?? "online")}

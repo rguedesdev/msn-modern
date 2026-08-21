@@ -1851,50 +1851,54 @@ function HomePage() {
                   Perfil
                 </p>
 
-                <div className="flex items-center gap-3 rounded-lg border border-white/80 bg-white/55 p-3">
-                  <PictureFrame
-                    imageSrc={
-                      isAvatarRemovalPending
-                        ? undefined
-                        : avatarPreviewUrl ||
-                          resolveApiAssetUrl(user?.avatarUrl) ||
-                          undefined
-                    }
-                    imageAlt="Minha imagem de perfil"
-                    displayName={user?.displayName}
-                    imageSize={58}
-                    frame={user?.profileFrame ?? "status"}
-                    status={toContactStatus(status)}
+                <div className="flex items-center gap-3 rounded-lg border border-[#8ebbd0] bg-white/55 p-3">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(event) => void changeProfileImage(event.currentTarget.files?.[0])}
                   />
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(event) => void changeProfileImage(event.currentTarget.files?.[0])}
+                  <button
+                    type="button"
+                    aria-label="Alterar imagem do perfil"
+                    title="Alterar imagem do perfil"
+                    disabled={isSavingProfileSettings || isPreparingProfileImage}
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="group relative shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65afd0]/50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <PictureFrame
+                      imageSrc={
+                        isAvatarRemovalPending
+                          ? undefined
+                          : avatarPreviewUrl ||
+                            resolveApiAssetUrl(user?.avatarUrl) ||
+                            undefined
+                      }
+                      imageAlt="Minha imagem de perfil"
+                      displayName={user?.displayName}
+                      imageSize={58}
+                      frame={user?.profileFrame ?? "status"}
+                      status={toContactStatus(status)}
                     />
-                    <button
-                      type="button"
-                      disabled={isSavingProfileSettings || isPreparingProfileImage}
-                      onClick={() => avatarInputRef.current?.click()}
-                      className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[#79a9bf] bg-gradient-to-b from-white to-[#e5f3f9] px-2 py-1.5 text-[11px] font-semibold text-[#315f77] shadow-sm transition hover:border-[#4b97b9] hover:from-white hover:to-[#d7edf6] disabled:cursor-wait disabled:opacity-60"
-                    >
-                      <MdOutlinePhotoCamera aria-hidden="true" size={16} />
-                      {isPreparingProfileImage ? "Preparando..." : "Escolher imagem"}
-                    </button>
-                    {(user?.avatarUrl || avatarDraft) && !isAvatarRemovalPending && (
+                    <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 z-20 flex items-center justify-center gap-0.5 rounded bg-[#183846]/80 px-1 py-0.5 text-[9px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                      <MdOutlinePhotoCamera aria-hidden="true" size={11} />
+                      {isPreparingProfileImage ? "Preparando" : "Alterar"}
+                    </span>
+                  </button>
+                  {(user?.avatarUrl || avatarDraft) && !isAvatarRemovalPending && (
+                    <div className="min-w-0 flex-1">
                       <button
                         type="button"
                         disabled={isSavingProfileSettings || isPreparingProfileImage}
                         onClick={removeProfileImage}
-                        className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-[#6e8998] transition hover:bg-white/70 hover:text-[#b14c4c] disabled:cursor-wait disabled:opacity-60"
+                        className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-red-500 px-2 py-1 text-[11px] text-red-600 transition-all duration-200 ease-in-out hover:border-red-700 hover:bg-red-700 hover:text-white hover:shadow-[0_2px_6px_rgba(185,28,28,0.28)] disabled:cursor-wait disabled:opacity-60"
                       >
                         <MdOutlineDelete aria-hidden="true" size={15} />
                         Remover imagem
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 <form onSubmit={saveProfile} className="space-y-2">
@@ -2466,7 +2470,7 @@ function HomePage() {
                 resetAddContact();
                 setIsAddingContact(false);
               }}
-              className="rounded border border-transparent px-3 py-1 text-xs text-[#52758a] transition-colors hover:border-red-300 hover:bg-red-50/80 hover:text-red-700"
+              className="rounded border border-red-500 px-3 py-1 text-xs text-red-600 transition-all duration-200 ease-in-out hover:border-red-700 hover:bg-red-700 hover:text-white hover:shadow-[0_2px_6px_rgba(185,28,28,0.28)]"
             >
               Cancelar
             </button>
