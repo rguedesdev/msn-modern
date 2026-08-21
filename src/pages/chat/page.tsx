@@ -2216,17 +2216,6 @@ function ChatWindow() {
     }
   }, [applyMessageStatuses, id]);
 
-  const isConversationFocused = useCallback(async () => {
-    if (!appWindow) {
-      return document.visibilityState === "visible" && document.hasFocus();
-    }
-    const [isFocused, isMinimized] = await Promise.all([
-      appWindow.isFocused(),
-      appWindow.isMinimized(),
-    ]);
-    return isFocused && !isMinimized;
-  }, [appWindow]);
-
   const markVisibleMessagesAsRead = useCallback(() => {
     const unreadMessageIds = messagesRef.current
       .filter((chatMessage) => chatMessage.author === "contact" && !chatMessage.readAt)
@@ -2365,14 +2354,7 @@ function ChatWindow() {
         const receivedMessageIds = available
           .filter((chatMessage) => chatMessage.author === "contact" && !chatMessage.readAt)
           .map((chatMessage) => String(chatMessage.id));
-        void isConversationFocused().then((isFocused) => {
-          if (!cancelled) {
-            void acknowledgeReceivedMessages(
-              receivedMessageIds,
-              isFocused ? "read" : "delivered",
-            );
-          }
-        });
+        void acknowledgeReceivedMessages(receivedMessageIds, "read");
       })
       .catch((error) => {
         if (!cancelled) setSendError(error instanceof Error ? error.message : "Erro ao carregar mensagens");
@@ -2392,14 +2374,7 @@ function ChatWindow() {
           const updatedMessages = appendChatMessage(id, decrypted);
           messagesRef.current = updatedMessages;
           setMessages(updatedMessages);
-          void isConversationFocused().then((isFocused) => {
-            if (!cancelled) {
-              void acknowledgeReceivedMessages(
-                [String(decrypted.id)],
-                isFocused ? "read" : "delivered",
-              );
-            }
-          });
+          void acknowledgeReceivedMessages([String(decrypted.id)], "read");
           if (appWindow) {
             void Promise.all([appWindow.isFocused(), appWindow.isMinimized()])
               .then(([isFocused, isMinimized]) => {
@@ -2481,7 +2456,7 @@ function ChatWindow() {
       realtimeSocketRef.current = null;
       socket?.disconnect();
     };
-  }, [acknowledgeReceivedMessages, appWindow, applyMessageStatuses, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, isConversationFocused, publishTypingState, refreshConversation, user]);
+  }, [acknowledgeReceivedMessages, appWindow, applyMessageStatuses, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, publishTypingState, refreshConversation, user]);
 
   const saveEditorSelection = () => {
     const editor = messageInputRef.current;

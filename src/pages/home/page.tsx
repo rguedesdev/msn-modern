@@ -1017,15 +1017,32 @@ function HomePage() {
   useEffect(() => {
     if (!user || isLoadingContacts) return;
     const socket = connectRealtime((encryptedMessage) => {
-      const contact = contatosRef.current.find((item) => item.id === encryptedMessage.conversationId);
-      if (!contact || encryptedMessage.senderUserId === user.id) return;
-      void markMessagesStatus(
-        encryptedMessage.conversationId,
-        [encryptedMessage._id],
-        "delivered",
-      ).catch((error) => {
-        console.error("Não foi possível confirmar a entrega da mensagem:", error);
+      if (encryptedMessage.senderUserId === user.id) return;
+
+      void (async () => {
+        let status: "delivered" | "read" = "delivered";
+        if (isTauri()) {
+          try {
+            const conversationWindow = await WebviewWindow.getByLabel(
+              `chat-${encryptedMessage.conversationId}`,
+            );
+            if (conversationWindow) status = "read";
+          } catch (error) {
+            console.error("Não foi possível verificar se a conversa está aberta:", error);
+          }
+        }
+
+        await markMessagesStatus(
+          encryptedMessage.conversationId,
+          [encryptedMessage._id],
+          status,
+        );
+      })().catch((error) => {
+        console.error("Não foi possível confirmar o recebimento da mensagem:", error);
       });
+
+      const contact = contatosRef.current.find((item) => item.id === encryptedMessage.conversationId);
+      if (!contact) return;
       playMessageNotificationSound();
 
       void (async () => {
