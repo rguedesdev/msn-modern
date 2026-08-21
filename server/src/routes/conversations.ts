@@ -7,6 +7,9 @@ import { ConversationModel } from "../models/conversation.js";
 import { UserModel } from "../models/user.js";
 
 const createDirectSchema = z.object({ participantUserId: objectIdSchema });
+const inviteParticipantSchema = z.object({ participantUserId: objectIdSchema });
+const conversationParamsSchema = z.object({ conversationId: objectIdSchema });
+const MAX_GROUP_PARTICIPANTS = 20;
 
 function hasParticipant(participants: Types.ObjectId[], userId: string): boolean {
   return participants.some((participant) => participant.toString() === userId);
@@ -80,14 +83,105 @@ export async function conversationRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: app.authenticate },
     async (request) => {
       const { conversationId } = parseInput(
-        z.object({ conversationId: objectIdSchema }),
+        conversationParamsSchema,
         request.params,
       );
+      const conversation = await ConversationModel.findOne({
+        _id: conversationId,
+        participants: request.user.sub,
+      })
+        .populate<{
+          participants: Array<{
+            _id: Types.ObjectId;
+            displayName: string;
+            email: string;
+            personalMessage?: string;
+            avatarFileId?: Types.ObjectId;
+            profileFrame?: string;
+            nameEffect?: string;
+          }>;
+        }>(
+          "participants",
+          "displayName email personalMessage avatarFileId profileFrame nameEffect",
+        );
+      if (!conversation) {
+        throw new HttpError(404, "Conversa não encontrada");
+      }
+      const object = conversation.toObject();
+      return {
+        conversation: {
+          ...object,
+          participants: object.participants.map((participant) => {
+            const { avatarFileId, ...publicParticipant } = participant;
+            const participantId = participant._id.toString();
+            return {
+              ...publicParticipant,
+              avatarUrl: avatarFileId
+                ? `/users/${participantId}/avatar?v=${avatarFileId.toString()}&policy=2`
+                : "",
+              profileFrame: participant.profileFrame ?? "status",
+              nameEffect: participant.nameEffect ?? "default",
+            };
+          }),
+        },
+      };
+    },
+  );
+
+  app.post(
+    "/conversations/:conversationId/participants",
+    { preHandler: app.authenticate },
+    async (request, reply) => {
+      const { conversationId } = parseInput(conversationParamsSchema, request.params);
+      const { participantUserId } = parseInput(inviteParticipantSchema, request.body);
       const conversation = await ConversationModel.findById(conversationId);
       if (!conversation || !hasParticipant(conversation.participants, request.user.sub)) {
         throw new HttpError(404, "Conversa não encontrada");
       }
-      return { conversation };
+      if (hasParticipant(conversation.participants, participantUserId)) {
+        throw new HttpError(409, "Este contato já participa da conversa");
+      }
+      if (conversation.participants.length >= MAX_GROUP_PARTICIPANTS) {
+        throw new HttpError(400, `O grupo pode ter no máximo ${MAX_GROUP_PARTICIPANTS} participantes`);
+      }
+      if (!(await UserModel.exists({ _id: participantUserId }))) {
+        throw new HttpError(404, "Participante não encontrado");
+      }
+
+      const contactKey = directConversationKey(request.user.sub, participantUserId);
+      if (!(await ConversationModel.exists({ kind: "direct", directKey: contactKey }))) {
+        throw new HttpError(403, "Você só pode convidar alguém da sua lista de contatos");
+      }
+
+      if (conversation.kind === "direct") {
+        const originalParticipants = conversation.participants.map(String);
+        const originalDirectKey = conversation.directKey;
+        conversation.kind = "group";
+        conversation.directKey = `group:${conversation._id.toString()}`;
+        await conversation.save();
+        await ConversationModel.findOneAndUpdate(
+          { directKey: originalDirectKey },
+          {
+            $setOnInsert: {
+              kind: "direct",
+              participants: originalParticipants,
+              directKey: originalDirectKey,
+            },
+          },
+          { upsert: true },
+        );
+      }
+
+      conversation.participants.push(new Types.ObjectId(participantUserId));
+      await conversation.save();
+
+      for (const participantId of conversation.participants) {
+        app.io.to(`user:${participantId.toString()}`).emit("conversation:changed", {
+          conversationId: conversation._id.toString(),
+        });
+      }
+
+      return reply.code(201).send({ conversationId: conversation._id.toString() });
     },
   );
 }

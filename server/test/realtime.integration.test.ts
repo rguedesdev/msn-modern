@@ -161,5 +161,31 @@ describe("eventos em tempo real", () => {
       deliveredAt: expect.any(String),
       readAt: expect.any(String),
     });
+
+    const charlie = await register("group-charlie@example.test", "Charlie");
+    const charlieSocket = await connect(charlie.accessToken);
+    const aliceCharlieContact = await app.inject({
+      method: "POST",
+      url: "/conversations/direct",
+      headers: { authorization: `Bearer ${alice.accessToken}` },
+      payload: { participantUserId: charlie.user.id },
+    });
+    expect(aliceCharlieContact.statusCode).toBe(201);
+
+    const groupChangedForCharlie = new Promise<{ conversationId: string }>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Convite do grupo não recebido")), 2_000);
+      charlieSocket.once("conversation:changed", (change) => {
+        clearTimeout(timeout);
+        resolve(change);
+      });
+    });
+    const inviteResponse = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/participants`,
+      headers: { authorization: `Bearer ${alice.accessToken}` },
+      payload: { participantUserId: charlie.user.id },
+    });
+    expect(inviteResponse.statusCode).toBe(201);
+    await expect(groupChangedForCharlie).resolves.toEqual({ conversationId });
   });
 });

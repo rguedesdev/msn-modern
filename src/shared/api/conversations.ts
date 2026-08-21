@@ -9,7 +9,7 @@ export interface ApiConversationParticipant extends Pick<
 
 export interface ApiConversation {
   _id: string;
-  kind: "direct";
+  kind: "direct" | "group";
   participants: ApiConversationParticipant[];
   createdAt: string;
   updatedAt: string;
@@ -29,6 +29,23 @@ export async function listConversations(): Promise<ApiConversation[]> {
 
 export async function createDirectConversation(participantUserId: string): Promise<void> {
   await apiRequest("/conversations/direct", {
+    method: "POST",
+    body: JSON.stringify({ participantUserId }),
+  });
+}
+
+export async function getConversation(conversationId: string): Promise<ApiConversation> {
+  const response = await apiRequest<{ conversation: ApiConversation }>(
+    `/conversations/${conversationId}`,
+  );
+  return response.conversation;
+}
+
+export async function inviteConversationParticipant(
+  conversationId: string,
+  participantUserId: string,
+): Promise<void> {
+  await apiRequest(`/conversations/${conversationId}/participants`, {
     method: "POST",
     body: JSON.stringify({ participantUserId }),
   });

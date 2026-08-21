@@ -384,6 +384,135 @@ describe("API com MongoDB", () => {
     expect(persistedStatusMessage.deliveredAt).toEqual(expect.any(String));
     expect(persistedStatusMessage.readAt).toEqual(expect.any(String));
 
+    const registerCharlie = await app.inject({
+      method: "POST",
+      url: "/auth/register",
+      payload: { email: "charlie@example.test", displayName: "Charlie", password: "password-charlie" },
+    });
+    expect(registerCharlie.statusCode).toBe(201);
+    const charlie = registerCharlie.json();
+    const charlieAuth = { authorization: `Bearer ${charlie.accessToken}` };
+    const charlieDeviceId = "66666666-6666-4666-8666-666666666666";
+    expect((await app.inject({
+      method: "PUT",
+      url: `/e2ee/devices/${charlieDeviceId}`,
+      headers: charlieAuth,
+      payload: {
+        algorithm: "ECDH-P256-HKDF-SHA256-AES256GCM",
+        publicKey: "BOPAQ1wdO3r3Xv0x4w4E5OWQpH2CX4vC1Mbz9w6vCW2FQqCwB4wvxWqHLO9ol2vG6VI6K7vVK8v6L8J7WZCvQ2M=",
+      },
+    })).statusCode).toBe(201);
+
+    const aliceCharlieContact = await app.inject({
+      method: "POST",
+      url: "/conversations/direct",
+      headers: aliceAuth,
+      payload: { participantUserId: charlie.user.id },
+    });
+    expect(aliceCharlieContact.statusCode).toBe(201);
+
+    const inviteCharlie = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/participants`,
+      headers: aliceAuth,
+      payload: { participantUserId: charlie.user.id },
+    });
+    expect(inviteCharlie.statusCode).toBe(201);
+
+    const groupForCharlie = await app.inject({
+      method: "GET",
+      url: `/conversations/${conversationId}`,
+      headers: charlieAuth,
+    });
+    expect(groupForCharlie.statusCode).toBe(200);
+    expect(groupForCharlie.json().conversation.kind).toBe("group");
+    expect(groupForCharlie.json().conversation.participants).toHaveLength(3);
+
+    const oldHistoryForCharlie = await app.inject({
+      method: "GET",
+      url: `/conversations/${conversationId}/messages?limit=100`,
+      headers: charlieAuth,
+    });
+    expect(oldHistoryForCharlie.statusCode).toBe(200);
+    expect(oldHistoryForCharlie.json().messages.every(
+      (message: { envelopes: unknown[] }) => message.envelopes.length === 0,
+    )).toBe(true);
+
+    const conversationsAfterInvite = await app.inject({
+      method: "GET",
+      url: "/conversations",
+      headers: aliceAuth,
+    });
+    const aliceConversations = conversationsAfterInvite.json().conversations as Array<{
+      _id: string;
+      kind: string;
+      participants: Array<{ _id: string }>;
+    }>;
+    expect(aliceConversations.some((item) => item._id === conversationId && item.kind === "group")).toBe(true);
+    expect(aliceConversations.some((item) =>
+      item.kind === "direct" &&
+      item.participants.some((participant) => participant._id === bob.user.id)
+    )).toBe(true);
+
+    const groupMessage = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages`,
+      headers: aliceAuth,
+      payload: {
+        senderDeviceId: aliceDeviceId,
+        clientMessageId: "77777777-7777-4777-8777-777777777777",
+        protocol: "webcrypto-p256-v1",
+        envelopes: [
+          {
+            recipientUserId: bob.user.id,
+            recipientDeviceId: bobDeviceId,
+            type: "prekey",
+            payload: ciphertext,
+          },
+          {
+            recipientUserId: charlie.user.id,
+            recipientDeviceId: charlieDeviceId,
+            type: "prekey",
+            payload: ciphertext,
+          },
+        ],
+      },
+    });
+    expect(groupMessage.statusCode).toBe(201);
+    const groupMessageId = groupMessage.json().message._id as string;
+
+    const bobDeliveredGroupMessage = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: bobAuth,
+      payload: { messageIds: [groupMessageId], status: "delivered" },
+    });
+    expect(bobDeliveredGroupMessage.json().statuses[0].deliveredAt).toBeNull();
+
+    const charlieDeliveredGroupMessage = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: charlieAuth,
+      payload: { messageIds: [groupMessageId], status: "delivered" },
+    });
+    expect(charlieDeliveredGroupMessage.json().statuses[0].deliveredAt).toEqual(expect.any(String));
+
+    const bobReadGroupMessage = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: bobAuth,
+      payload: { messageIds: [groupMessageId], status: "read" },
+    });
+    expect(bobReadGroupMessage.json().statuses[0].readAt).toBeNull();
+
+    const charlieReadGroupMessage = await app.inject({
+      method: "POST",
+      url: `/conversations/${conversationId}/messages/status`,
+      headers: charlieAuth,
+      payload: { messageIds: [groupMessageId], status: "read" },
+    });
+    expect(charlieReadGroupMessage.json().statuses[0].readAt).toEqual(expect.any(String));
+
     const refreshed = await app.inject({
       method: "POST",
       url: "/auth/refresh",

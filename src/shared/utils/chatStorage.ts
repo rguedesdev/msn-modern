@@ -3,6 +3,7 @@ import { decodeChatPayload, type ChatImagePayload } from "./chatPayload";
 export interface ChatMessage {
   id: number | string;
   author: "me" | "contact";
+  senderUserId?: string;
   text: string;
   image?: ChatImagePayload;
   sentAt?: number;

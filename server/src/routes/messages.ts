@@ -81,11 +81,26 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
       const changedMessages: typeof messages = [];
       for (const message of messages) {
         let changed = false;
-        if (!message.deliveredAt) {
+        const deliveredUserIds = new Set((message.deliveredTo ?? []).map(String));
+        const readUserIds = new Set((message.readBy ?? []).map(String));
+        if (!deliveredUserIds.has(request.user.sub)) {
+          message.deliveredTo.push(new Types.ObjectId(request.user.sub));
+          deliveredUserIds.add(request.user.sub);
+          changed = true;
+        }
+        if (input.status === "read" && !readUserIds.has(request.user.sub)) {
+          message.readBy.push(new Types.ObjectId(request.user.sub));
+          readUserIds.add(request.user.sub);
+          changed = true;
+        }
+        const recipientUserIds = conversation.participants
+          .map(String)
+          .filter((participantId) => participantId !== message.senderUserId.toString());
+        if (!message.deliveredAt && recipientUserIds.every((userId) => deliveredUserIds.has(userId))) {
           message.deliveredAt = acknowledgedAt;
           changed = true;
         }
-        if (input.status === "read" && !message.readAt) {
+        if (!message.readAt && recipientUserIds.every((userId) => readUserIds.has(userId))) {
           message.readAt = acknowledgedAt;
           changed = true;
         }

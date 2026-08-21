@@ -40,6 +40,13 @@ import {
 } from "../../shared/utils/chatPayload";
 import { useAuth } from "../../shared/auth/AuthContext";
 import { resolveApiAssetUrl } from "../../shared/api/client";
+import {
+  getConversation,
+  inviteConversationParticipant,
+  listConversations,
+  type ApiConversation,
+  type ApiConversationParticipant,
+} from "../../shared/api/conversations";
 import { decryptEnvelope, encryptForDevice, listPublicKeys, registerCurrentDevice } from "../../shared/api/e2ee";
 import {
   listEncryptedMessages,
@@ -68,6 +75,7 @@ import {
   MdKeyboardArrowDown,
   MdMinimize,
   MdOutlineVideoChat,
+  MdPersonAddAlt,
   MdVoiceChat,
 } from "react-icons/md";
 import { FaMicrophoneAlt, FaHeadphonesAlt } from "react-icons/fa";
@@ -1596,6 +1604,13 @@ function ChatWindow() {
   const [isPreparingImage, setIsPreparingImage] = useState(false);
   const [pendingImage, setPendingImage] = useState<ChatImagePayload | null>(null);
   const [isContactTyping, setIsContactTyping] = useState(false);
+  const [typingUserId, setTypingUserId] = useState("");
+  const [conversation, setConversation] = useState<ApiConversation | null>(null);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [isLoadingInviteCandidates, setIsLoadingInviteCandidates] = useState(false);
+  const [invitingUserId, setInvitingUserId] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  const [inviteCandidates, setInviteCandidates] = useState<ApiConversationParticipant[]>([]);
   const [maximizedImage, setMaximizedImage] = useState<ChatImagePayload | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
     id ? getChatMessages(id) : [],
@@ -1732,13 +1747,48 @@ function ChatWindow() {
 
   const contactStatusFrame = CONTACT_STATUS_FRAMES[toContactStatus(contactStatus)];
   const contactStatusLabel = contactStatusFrame.label;
+  const otherParticipants = conversation?.participants.filter(
+    (participant) => participant._id !== user?.id,
+  ) ?? [];
+  const isGroupConversation = conversation?.kind === "group";
+  const conversationTitle = isGroupConversation
+    ? otherParticipants.map((participant) => participant.displayName).join(", ")
+    : contactName;
+  const conversationStatusLabel = isGroupConversation
+    ? `${conversation?.participants.length ?? 0} participantes`
+    : contactStatusLabel;
+  const typingDisplayName = conversation?.participants.find(
+    (participant) => participant._id === typingUserId,
+  )?.displayName ?? contactName;
+
+  const refreshConversation = useCallback(async () => {
+    if (!id) return null;
+    const updatedConversation = await getConversation(id);
+    setConversation(updatedConversation);
+    return updatedConversation;
+  }, [id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void refreshConversation().catch((error) => {
+        if (!cancelled) {
+          console.error("Não foi possível carregar os participantes da conversa:", error);
+        }
+      });
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [refreshConversation]);
 
   useEffect(() => {
     if (!appWindow) return;
-    void appWindow.setTitle(contactName).catch((error) => {
+    void appWindow.setTitle(conversationTitle).catch((error) => {
       console.error("Erro ao atualizar o título nativo da conversa:", error);
     });
-  }, [appWindow, contactName]);
+  }, [appWindow, conversationTitle]);
 
   const lastReceivedAt = useMemo(() => {
     const lastReceivedMessage = messages.findLast(
@@ -1848,9 +1898,11 @@ function ChatWindow() {
       remoteTypingTimerRef.current = undefined;
     }
     setIsContactTyping(typing.isTyping);
+    setTypingUserId(typing.isTyping ? typing.userId : "");
     if (typing.isTyping) {
       remoteTypingTimerRef.current = window.setTimeout(() => {
         setIsContactTyping(false);
+        setTypingUserId("");
         remoteTypingTimerRef.current = undefined;
       }, REMOTE_TYPING_TIMEOUT_MS);
     }
@@ -1944,19 +1996,33 @@ function ChatWindow() {
     if (!user) {
       throw new Error("Sua sessão não está disponível nesta janela. Feche a conversa e abra novamente.");
     }
-    if (!id || !contactUserId) {
+    if (!id) {
       throw new Error("Não foi possível identificar esta conversa.");
     }
+    const recipients = conversation
+      ? conversation.participants.filter((participant) => participant._id !== user.id)
+      : contactUserId
+        ? [{ _id: contactUserId, displayName: contactName }]
+        : [];
+    if (recipients.length === 0) {
+      throw new Error("Não foi possível identificar os participantes desta conversa.");
+    }
     const identity = await registerCurrentDevice(user.id);
-    const [recipientKeys, ownKeys] = await Promise.all([
-      listPublicKeys(contactUserId),
+    const [recipientKeyGroups, ownKeys] = await Promise.all([
+      Promise.all(recipients.map(async (participant) => ({
+        participant,
+        keys: await listPublicKeys(participant._id),
+      }))),
       listPublicKeys(user.id),
     ]);
-    if (recipientKeys.length === 0) {
-      throw new Error(`${contactName} precisa abrir a versão atualizada do aplicativo uma vez para ativar a criptografia.`);
+    const recipientWithoutKeys = recipientKeyGroups.find(({ keys }) => keys.length === 0);
+    if (recipientWithoutKeys) {
+      throw new Error(`${recipientWithoutKeys.participant.displayName} precisa abrir a versão atualizada do aplicativo uma vez para ativar a criptografia.`);
     }
     const targets = [
-      ...recipientKeys.map((key) => ({ userId: contactUserId, key })),
+      ...recipientKeyGroups.flatMap(({ participant, keys }) =>
+        keys.map((key) => ({ userId: participant._id, key })),
+      ),
       ...ownKeys.map((key) => ({ userId: user.id, key })),
     ];
     const envelopes = await Promise.all(
@@ -1968,6 +2034,10 @@ function ChatWindow() {
   };
 
   const handleSendMessage = async () => {
+    if (!user) {
+      setSendError("Sua sessão não está disponível nesta janela.");
+      return;
+    }
     const hasText = Boolean(message.trim());
     if (!hasText && !pendingImage) return;
     const validation = hasText ? chatMessageSchema.safeParse(message) : null;
@@ -1989,6 +2059,7 @@ function ChatWindow() {
       const chatMessage: ChatMessage = {
         id: sent._id,
         author: "me",
+        senderUserId: user.id,
         text: validatedMessage,
         image: image ?? undefined,
         sentAt: new Date(sent.sentAt).getTime(),
@@ -2027,6 +2098,52 @@ function ChatWindow() {
     }
   };
 
+  const handleOpenInvite = async () => {
+    if (!user) return;
+    setIsInviteOpen(true);
+    setIsLoadingInviteCandidates(true);
+    setInviteError("");
+    try {
+      const conversations = await listConversations();
+      const currentParticipantIds = new Set(
+        conversation?.participants.map((participant) => participant._id) ?? [user.id, contactUserId],
+      );
+      const candidatesById = new Map<string, ApiConversationParticipant>();
+      for (const directConversation of conversations) {
+        if (directConversation.kind !== "direct") continue;
+        const candidate = directConversation.participants.find(
+          (participant) => participant._id !== user.id,
+        );
+        if (candidate && !currentParticipantIds.has(candidate._id)) {
+          candidatesById.set(candidate._id, candidate);
+        }
+      }
+      setInviteCandidates([...candidatesById.values()]);
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "Não foi possível carregar seus contatos");
+    } finally {
+      setIsLoadingInviteCandidates(false);
+    }
+  };
+
+  const handleInviteParticipant = async (participantUserId: string) => {
+    if (!id || invitingUserId) return;
+    setInvitingUserId(participantUserId);
+    setInviteError("");
+    try {
+      await inviteConversationParticipant(id, participantUserId);
+      await refreshConversation();
+      setInviteCandidates((current) => current.filter(
+        (candidate) => candidate._id !== participantUserId,
+      ));
+      setIsInviteOpen(false);
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "Não foi possível convidar o contato");
+    } finally {
+      setInvitingUserId("");
+    }
+  };
+
   const decryptApiMessage = useCallback(async (apiMessage: ApiEncryptedMessage): Promise<ChatMessage | null> => {
     if (!id || !user) return null;
     const identity = await registerCurrentDevice(user.id);
@@ -2039,6 +2156,7 @@ function ChatWindow() {
       return {
         id: apiMessage._id,
         author: apiMessage.senderUserId === user.id ? "me" : "contact",
+        senderUserId: apiMessage.senderUserId,
         text: decryptedPayload.type === "text"
           ? decryptedPayload.text
           : decryptedPayload.image.caption ?? "",
@@ -2148,13 +2266,13 @@ function ChatWindow() {
         console.error("Erro ao alterar o destaque da conversa:", error);
       });
       void invoke("set_kwin_window_attention", {
-        windowTitle: contactName,
+        windowTitle: conversationTitle,
         attention: highlighted,
       }).catch((error) => {
         console.error("Erro ao alternar o destaque no KWin:", error);
       });
     },
-    [appWindow, contactName],
+    [appWindow, conversationTitle],
   );
 
   const stopTaskbarBlinkTimers = useCallback(() => {
@@ -2264,6 +2382,7 @@ function ChatWindow() {
       (incoming) => {
         if (incoming.conversationId !== id || incoming.senderUserId === user.id) return;
         setIsContactTyping(false);
+        setTypingUserId("");
         if (remoteTypingTimerRef.current !== undefined) {
           window.clearTimeout(remoteTypingTimerRef.current);
           remoteTypingTimerRef.current = undefined;
@@ -2336,6 +2455,11 @@ function ChatWindow() {
       (status) => {
         if (!isTauri()) applyMessageStatuses([status]);
       },
+      ({ conversationId }) => {
+        if (conversationId === id) {
+          void refreshConversation();
+        }
+      },
     );
     realtimeSocketRef.current = socket;
     return () => {
@@ -2353,10 +2477,11 @@ function ChatWindow() {
       }
       isTypingSentRef.current = false;
       setIsContactTyping(false);
+      setTypingUserId("");
       realtimeSocketRef.current = null;
       socket?.disconnect();
     };
-  }, [acknowledgeReceivedMessages, appWindow, applyMessageStatuses, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, isConversationFocused, publishTypingState, user]);
+  }, [acknowledgeReceivedMessages, appWindow, applyMessageStatuses, blinkTaskbarInAmber, contactUserId, decryptApiMessage, handleRemoteTyping, id, isConversationFocused, publishTypingState, refreshConversation, user]);
 
   const saveEditorSelection = () => {
     const editor = messageInputRef.current;
@@ -2518,7 +2643,7 @@ function ChatWindow() {
     if (
       !socket ||
       !id ||
-      isContactOffline
+      (!isGroupConversation && isContactOffline)
     ) return;
     try {
       const response = await socket.timeout(5_000).emitWithAck(
@@ -2634,7 +2759,7 @@ function ChatWindow() {
               <video
                 autoPlay
                 playsInline
-                aria-label={`Vídeo de ${contactName}`}
+                aria-label={`Vídeo de ${conversationTitle}`}
                 className="h-full w-full object-cover"
               />
             </div>
@@ -2684,7 +2809,7 @@ function ChatWindow() {
             data-tauri-drag-region
             className="min-w-0 flex-1 truncate text-xs font-semibold text-[#315b72]"
           >
-            Conversa com {contactName}
+            Conversa com {conversationTitle}
           </span>
           <div className="ml-1 flex h-full items-stretch">
             <button
@@ -2730,8 +2855,8 @@ function ChatWindow() {
               frame={contactProfileFrame}
               status={toContactStatus(contactStatus)}
               imageSrc={resolveApiAssetUrl(contactAvatarUrl) || undefined}
-              imageAlt={`Foto de perfil de ${contactName}`}
-              displayName={contactName}
+              imageAlt={isGroupConversation ? "Foto da conversa em grupo" : `Foto de perfil de ${contactName}`}
+              displayName={conversationTitle}
               imageSize={96}
             />
           </aside>
@@ -2742,17 +2867,17 @@ function ChatWindow() {
                 <h1 className="flex min-w-0 items-center gap-1 text-lg font-semibold text-[#284f65]">
                   <span
                     className="min-w-0 truncate"
-                    style={contactNameEffect !== "default"
+                    style={!isGroupConversation && contactNameEffect !== "default"
                       ? getTextEffectStyle(contactNameEffect)
                       : undefined}
                   >
-                    {contactName}
+                    {conversationTitle}
                   </span>
                   <span className="shrink-0 text-sm font-normal italic text-[#67899a]">
-                    ({contactStatusLabel})
+                    ({conversationStatusLabel})
                   </span>
                 </h1>
-                {contactActivity && (
+                {!isGroupConversation && contactActivity && (
                   <div className="msn-profile-message flex min-w-0 items-center gap-1.5 text-xs italic">
                     {contactMusicSource && (
                       <span className="shrink-0 text-[16px] not-italic">
@@ -2774,7 +2899,7 @@ function ChatWindow() {
               {messages.length === 0 ? (
                 <div className="flex h-full min-h-24 items-center justify-center">
                   <p className="rounded-full border border-[#d4e5ed] bg-white/70 px-4 py-1.5 text-center text-xs italic text-[#7893a0]">
-                    Início da conversa com {contactName}
+                    Início da conversa com {conversationTitle}
                   </p>
                 </div>
               ) : (
@@ -2792,11 +2917,11 @@ function ChatWindow() {
                         className="mb-1 px-1 text-xs font-medium text-[#5f7f90]"
                         style={chatMessage.author === "me"
                           ? (ownNameEffect !== "default" ? getTextEffectStyle(ownNameEffect) : undefined)
-                          : (contactNameEffect !== "default" ? getTextEffectStyle(contactNameEffect) : undefined)}
+                          : (!isGroupConversation && contactNameEffect !== "default" ? getTextEffectStyle(contactNameEffect) : undefined)}
                       >
                         {chatMessage.author === "me"
                           ? `${user?.displayName ?? "Você"} diz:`
-                          : `${contactName} diz:`}
+                          : `${conversation?.participants.find((participant) => participant._id === chatMessage.senderUserId)?.displayName ?? contactName} diz:`}
                       </span>
                       <div className="max-w-[78%] whitespace-pre-wrap break-words rounded-[9px] border border-[#c4dbe5] bg-white p-2 text-[#375567] shadow-[0_1px_3px_rgba(42,83,104,0.1)]">
                         {chatMessage.image ? (
@@ -2863,7 +2988,7 @@ function ChatWindow() {
                   className="pointer-events-none mt-3 flex justify-start"
                 >
                   <div className="msn-typing-bubble flex items-center gap-2 rounded-[9px] border border-[#bdd8e5] bg-gradient-to-b from-white to-[#eaf6fb] px-3 py-2 text-xs font-semibold text-[#287da5] shadow-[0_2px_7px_rgba(47,91,113,0.16)]">
-                    <span>{contactName} está digitando</span>
+                    <span>{typingDisplayName} está digitando</span>
                     <span aria-hidden="true" className="flex items-end gap-1 pb-0.5">
                       <span className="msn-typing-dot" />
                       <span className="msn-typing-dot" />
@@ -3287,8 +3412,8 @@ function ChatWindow() {
                   type="button"
                   className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={handleSendNudge}
-                  disabled={isContactOffline}
-                  title={isContactOffline
+                  disabled={!isGroupConversation && isContactOffline}
+                  title={!isGroupConversation && isContactOffline
                     ? "Não é possível chamar a atenção de um contato offline"
                     : "Chamar a atenção"}
                 >
@@ -3322,6 +3447,16 @@ function ChatWindow() {
                   className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent transition-colors enabled:hover:border-white enabled:hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <FcAddImage aria-hidden="true" size={21} />
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Convidar contato para a conversa"
+                  title="Convidar contato"
+                  onClick={() => void handleOpenInvite()}
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-[#527b90] transition-colors hover:border-white hover:bg-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#65afd0]/50"
+                >
+                  <MdPersonAddAlt aria-hidden="true" size={21} />
                 </button>
 
                 <button
@@ -3385,6 +3520,86 @@ function ChatWindow() {
           </p>
         </footer>
       </div>
+
+      {isInviteOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Convidar contato para a conversa"
+          className="msn-invite-backdrop fixed inset-2.5 z-[100] flex items-center justify-center rounded-[12px] bg-[#102633]/90 p-6"
+          onClick={() => setIsInviteOpen(false)}
+        >
+          <div
+            className="msn-invite-panel w-full max-w-[420px] overflow-hidden rounded-[10px] border border-[#7faec4] bg-gradient-to-b from-[#f8fdff] to-[#e3f3fa] shadow-[0_8px_24px_rgba(20,55,73,0.34)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="flex items-center justify-between border-b border-[#b9d5e1] px-4 py-3">
+              <div>
+                <h2 className="text-sm font-semibold text-[#284f65]">Convidar para a conversa</h2>
+                <p className="mt-0.5 text-[11px] text-[#67899a]">Escolha um contato para criar ou ampliar o grupo.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Fechar convite"
+                title="Fechar"
+                onClick={() => setIsInviteOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-[#52758a] transition hover:border-white hover:bg-white/70"
+              >
+                <MdClose aria-hidden="true" size={18} />
+              </button>
+            </header>
+            <div className="max-h-[340px] overflow-y-auto p-3">
+              {isLoadingInviteCandidates && (
+                <p className="py-6 text-center text-xs italic text-[#7893a0]">Carregando contatos...</p>
+              )}
+              {!isLoadingInviteCandidates && inviteError && (
+                <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {inviteError}
+                </p>
+              )}
+              {!isLoadingInviteCandidates && !inviteError && inviteCandidates.length === 0 && (
+                <p className="py-6 text-center text-xs italic text-[#7893a0]">
+                  Todos os seus contatos já participam desta conversa.
+                </p>
+              )}
+              {!isLoadingInviteCandidates && inviteCandidates.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  {inviteCandidates.map((candidate) => (
+                    <button
+                      key={candidate._id}
+                      type="button"
+                      disabled={Boolean(invitingUserId)}
+                      onClick={() => void handleInviteParticipant(candidate._id)}
+                      className="flex items-center gap-3 rounded-[8px] border border-transparent bg-white/45 p-2 text-left transition hover:border-[#8ebbd0] hover:bg-white/80 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {candidate.avatarUrl ? (
+                        <img
+                          src={resolveApiAssetUrl(candidate.avatarUrl)}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded-md border border-[#b9d5e1] object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#b9d5e1] bg-[#dceef6] text-sm font-semibold text-[#52758a]">
+                          {candidate.displayName.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-[#31556a]">
+                          {candidate.displayName}
+                        </span>
+                        <span className="block truncate text-[11px] text-[#67899a]">{candidate.email}</span>
+                      </span>
+                      <span className="text-xs font-semibold text-[#287da5]">
+                        {invitingUserId === candidate._id ? "Convidando..." : "Convidar"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {maximizedImage && (
         <div

@@ -24,6 +24,10 @@ export interface TypingNotification {
   isTyping: boolean;
 }
 
+export interface ConversationChangedNotification {
+  conversationId: string;
+}
+
 export async function setConversationTyping(
   conversationId: string,
   isTyping: boolean,
@@ -69,6 +73,7 @@ export function connectRealtime(
   onAccountChanged?: (account: RealtimeAccount) => void,
   onTypingChanged?: (typing: TypingNotification) => void,
   onMessageStatusChanged?: (status: MessageStatusUpdate) => void,
+  onConversationChanged?: (conversation: ConversationChangedNotification) => void,
 ): Socket | null {
   const session = getSession();
   if (!session) return null;
@@ -120,5 +125,6 @@ export function connectRealtime(
   if (onAccountChanged) socket.on("account:changed", onAccountChanged);
   if (onTypingChanged) socket.on("typing:changed", onTypingChanged);
   if (onMessageStatusChanged) socket.on("message:status", onMessageStatusChanged);
+  if (onConversationChanged) socket.on("conversation:changed", onConversationChanged);
   return socket;
 }

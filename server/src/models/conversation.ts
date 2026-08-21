@@ -1,7 +1,7 @@
 import { Schema, model, type Types } from "mongoose";
 
 export interface Conversation {
-  kind: "direct";
+  kind: "direct" | "group";
   participants: Types.ObjectId[];
   directKey: string;
   createdAt: Date;
@@ -10,7 +10,7 @@ export interface Conversation {
 
 const conversationSchema = new Schema<Conversation>(
   {
-    kind: { type: String, enum: ["direct"], default: "direct", required: true },
+    kind: { type: String, enum: ["direct", "group"], default: "direct", required: true },
     participants: [{ type: Schema.Types.ObjectId, ref: "User", required: true }],
     directKey: { type: String, required: true, unique: true },
   },

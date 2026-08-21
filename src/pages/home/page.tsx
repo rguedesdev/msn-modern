@@ -101,7 +101,9 @@ import { decodeChatPayload } from "../../shared/utils/chatPayload";
 
 interface Contact {
   id: string;
+  kind: "direct" | "group";
   userId: string;
+  participantUserIds: string[];
   name: string;
   avatarUrl: string;
   profileFrame: ProfileFrame;
@@ -794,19 +796,28 @@ function HomePage() {
     try {
       const conversations = await listConversations();
       const mappedContacts = conversations.flatMap<Contact>((conversation) => {
-        const participant = conversation.participants.find(
+        const otherParticipants = conversation.participants.filter(
           (candidate) => candidate._id !== user.id,
         );
+        const participant = otherParticipants[0];
         if (!participant) return [];
+        const isGroup = conversation.kind === "group";
         return [{
           id: conversation._id,
+          kind: conversation.kind,
           userId: participant._id,
-          name: participant.displayName,
+          participantUserIds: otherParticipants.map((candidate) => candidate._id),
+          name: isGroup
+            ? otherParticipants.map((candidate) => candidate.displayName).join(", ")
+            : participant.displayName,
           avatarUrl: participant.avatarUrl ?? "",
           profileFrame: participant.profileFrame ?? "status",
           nameEffect: participant.nameEffect ?? "default",
-          status: onlineUserIdsRef.current.has(participant._id) ? "online" : "offline",
+          status: otherParticipants.some((candidate) => onlineUserIdsRef.current.has(candidate._id))
+            ? "online"
+            : "offline",
           msg: (() => {
+            if (isGroup) return `${conversation.participants.length} participantes`;
             const profile = realtimeProfilesRef.current.get(participant._id);
             return profile
               ? profile.music || profile.personalMessage
@@ -816,7 +827,7 @@ function HomePage() {
             const profile = realtimeProfilesRef.current.get(participant._id);
             return profile?.music ? profile.musicSource : "";
           })(),
-          group: "Geral",
+          group: isGroup ? "Conversas em grupo" : "Geral",
         }];
       });
       contatosRef.current = mappedContacts;
@@ -1059,7 +1070,9 @@ function HomePage() {
       setContatos((current) => {
         let changed = false;
         const updated = current.map((contact) => {
-          const status: ContactStatus = online.has(contact.userId) ? "online" : "offline";
+          const status: ContactStatus = contact.participantUserIds.some((userId) => online.has(userId))
+            ? "online"
+            : "offline";
           if (contact.status === status) return contact;
           changed = true;
           return { ...contact, status };
@@ -1071,15 +1084,16 @@ function HomePage() {
     }, ({ userId, online }) => {
       if (online) onlineUserIdsRef.current.add(userId);
       else onlineUserIdsRef.current.delete(userId);
-      if (online) return;
-
       setContatos((current) => {
-        const offlineStatus: ContactStatus = "offline";
         let changed = false;
         const updated = current.map((contact) => {
-          if (contact.userId !== userId || contact.status === "offline") return contact;
+          if (!contact.participantUserIds.includes(userId)) return contact;
+          const nextStatus: ContactStatus = contact.participantUserIds.some(
+            (participantUserId) => onlineUserIdsRef.current.has(participantUserId),
+          ) ? "online" : "offline";
+          if (contact.status === nextStatus) return contact;
           changed = true;
-          return { ...contact, status: offlineStatus };
+          return { ...contact, status: nextStatus };
         });
         const result = changed ? updated : current;
         contatosRef.current = result;
@@ -1087,7 +1101,7 @@ function HomePage() {
       });
     }, (nudge) => {
       const contact = contatosRef.current.find(
-        (item) => item.id === nudge.conversationId && item.userId === nudge.senderUserId,
+        (item) => item.id === nudge.conversationId && item.participantUserIds.includes(nudge.senderUserId),
       );
       if (contact) void openConversation(contact, true);
     }, (profiles) => {
@@ -1095,6 +1109,7 @@ function HomePage() {
         profiles.map((profile) => [profile.userId, profile]),
       );
       setContatos((current) => current.map((contact) => {
+        if (contact.kind === "group") return contact;
         const profile = realtimeProfilesRef.current.get(contact.userId);
         if (!profile) return contact;
         const msg = profile?.music || profile?.personalMessage || "";
@@ -1108,7 +1123,8 @@ function HomePage() {
       const msg = profile.music || profile.personalMessage || "";
       const musicSource = profile.music ? profile.musicSource : "";
       setContatos((current) => current.map((contact) =>
-        contact.userId === profile.userId &&
+        contact.kind === "direct" &&
+          contact.userId === profile.userId &&
           (contact.msg !== msg || contact.musicSource !== musicSource)
           ? { ...contact, msg, musicSource }
           : contact,
@@ -1123,10 +1139,12 @@ function HomePage() {
           .map((item) => item.userId),
       );
       setContatos((current) => {
-        const updated = current.map((contact) => ({
-          ...contact,
-          status: statusByUserId.get(contact.userId) ?? "offline",
-        }));
+        const updated = current.map((contact) => {
+          const status: ContactStatus = contact.participantUserIds.some(
+            (participantUserId) => (statusByUserId.get(participantUserId) ?? "offline") !== "offline",
+          ) ? "online" : "offline";
+          return { ...contact, status };
+        });
         contatosRef.current = updated;
         return updated;
       });
@@ -1134,7 +1152,7 @@ function HomePage() {
       if (contactStatus === "offline") onlineUserIdsRef.current.delete(userId);
       else onlineUserIdsRef.current.add(userId);
       const contactBeforeChange = contatosRef.current.find(
-        (contact) => contact.userId === userId,
+        (contact) => contact.kind === "direct" && contact.userId === userId,
       );
       const shouldNotifyOnline = Boolean(
         contactStatus === "online" &&
@@ -1144,9 +1162,13 @@ function HomePage() {
       setContatos((current) => {
         let changed = false;
         const updated = current.map((contact) => {
-          if (contact.userId !== userId || contact.status === contactStatus) return contact;
+          if (!contact.participantUserIds.includes(userId)) return contact;
+          const nextStatus: ContactStatus = contact.participantUserIds.some(
+            (participantUserId) => onlineUserIdsRef.current.has(participantUserId),
+          ) ? "online" : "offline";
+          if (contact.status === nextStatus) return contact;
           changed = true;
-          return { ...contact, status: contactStatus };
+          return { ...contact, status: nextStatus };
         });
         const result = changed ? updated : current;
         contatosRef.current = result;
@@ -1159,7 +1181,7 @@ function HomePage() {
       setContatos((current) => {
         let changed = false;
         const updated = current.map((contact) => {
-          if (contact.userId !== account.userId) return contact;
+          if (contact.kind === "group" || contact.userId !== account.userId) return contact;
           if (
             contact.name === account.displayName &&
             contact.avatarUrl === account.avatarUrl &&
@@ -1199,6 +1221,8 @@ function HomePage() {
       ).catch((error) => {
         console.error("Erro ao encaminhar status da mensagem:", error);
       });
+    }, () => {
+      void loadContacts();
     });
     realtimeSocketRef.current = socket;
     const publishRealtimeState = () => {
@@ -1214,6 +1238,7 @@ function HomePage() {
     };
   }, [
     isLoadingContacts,
+    loadContacts,
     notifyContactOnline,
     openConversation,
     playMessageNotificationSound,
@@ -2517,7 +2542,7 @@ function HomePage() {
                   </div>
                 ))
               : // RENDERIZAÇÃO POR GRUPOS
-                ["Geral"].map((grupoName) => {
+                ["Geral", "Conversas em grupo"].map((grupoName) => {
                   const contatosDoGrupo = getFiltrados().filter(
                     (c) => c.group === grupoName,
                   );
